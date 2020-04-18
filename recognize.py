@@ -13,6 +13,7 @@ print("[INFO] - Loading face detector")
 detector = cv2.dnn.readNetFromCaffe("models/face_detection_model/deploy.prototxt",
             "models/face_detection_model/res10_300x300_ssd_iter_140000.caffemodel")
 
+
 print("[INFO] - Loading embedding model")
 emb = cv2.dnn.readNetFromTorch("models/nn4.v2.t7")
 
@@ -20,11 +21,11 @@ recognizer = pickle.loads(open("pickle/recog.pickle", "rb").read())
 le = pickle.loads(open("pickle/le.pickle", "rb").read())
 
 print("[INFO] starting video stream")
-vs = VideoStream(src=0).start()
+vs = VideoStream(src=0,resolution=(1920,1080)).start()
 time.sleep(2.0)
 
 fps = FPS().start()
-
+noDetected=0
 while True:
 
 	frame = vs.read()
@@ -43,13 +44,13 @@ while True:
 
 		confidence = detections[0, 0, i, 2]
 		
-		if confidence > 0.5:
+		if confidence > 0.8:
+			noDetected+=1
 			box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
 			(startX, startY, endX, endY) = box.astype("int")
-
+			
 			face = frame[startY:endY, startX:endX]
 			(fH, fW) = face.shape[:2]
-
 			if fW < 20 or fH < 20:
 				continue
 
@@ -67,18 +68,20 @@ while True:
 			cv2.rectangle(frame, (startX, startY), (endX, endY),
 				(0, 0, 255), 2)
 			cv2.putText(frame, text, (startX, y),
-				cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
-		
+				cv2.FONT_ITALIC,.45, (0, 0, 255), 2)
+	text2="{} faces".format(noDetected)
+	cv2.putText(frame,text2,(20,30),cv2.FONT_ITALIC,.60,(0,0,255),2)	
+	noDetected=0
 	fps.update()
 	cv2.imshow("Frame", frame)
 	key = cv2.waitKey(1) & 0xFF
 	
 	if key == ord("q"):
-		break
+		fps.stop()
+		print("[INFO] - elasped time: {:.2f}".format(fps.elapsed()))
+		print("[INFO] - approx. FPS: {:.2f}".format(fps.fps()))
+		vs.stop()
+		cv2.destroyAllWindows()
+		exit()
+		
 
-fps.stop()
-print("[INFO] elasped time: {:.2f}".format(fps.elapsed()))
-print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
-
-cv2.destroyAllWindows()
-vs.stop()

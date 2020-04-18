@@ -4,6 +4,7 @@ import imutils
 import pickle
 import cv2
 import os
+from progressbar import ProgressBar,ETA,FileTransferSpeed
 
 print("[INFO] - Loading face detector")
 detector = cv2.dnn.readNetFromCaffe("models/face_detection_model/deploy.prototxt",
@@ -19,9 +20,10 @@ knownEmbeddings = []
 knownNames = []
 
 total = 0
-
-for (i,imagePath) in enumerate(imagePaths):
-    print("[INFO] - Processing image {}/{}".format(i+1,len(imagePaths)))
+bar = ProgressBar(maxval=len(imagePaths)).start()
+bar.widgets.append(ETA())
+bar.widgets.append(FileTransferSpeed(unit="img"))
+for (i,imagePath) in enumerate(imagePaths):   
     name = imagePath.split(os.path.sep)[-2]
 
     image = cv2.imread(imagePath)
@@ -44,7 +46,7 @@ for (i,imagePath) in enumerate(imagePaths):
         i = np.argmax(detections[0,0,:,2])
         confidence = detections[0,0,i,2]
 
-        if confidence > 0.5:
+        if confidence > 0.7:
             box=detections[0,0,i,3:7] * np.array([w,h,w,h])
             (startX,startY,endX,endY)=box.astype("int")
 
@@ -60,9 +62,11 @@ for (i,imagePath) in enumerate(imagePaths):
 
             knownNames.append(name)
             knownEmbeddings.append(vec.flatten())
+            bar.update(total+1)
             total+=1
-print("[INFO] serializing {} encodings...".format(total))
+bar.finish()            
+print("[INFO] - Serializing {} encodings...".format(total))
 data = {"embeddings": knownEmbeddings, "names": knownNames}
-f = open("pickle/embeddings.pickle", "wb")
+f = open("pickle/embeddings.pickle","wb")
 f.write(pickle.dumps(data))
 f.close()
