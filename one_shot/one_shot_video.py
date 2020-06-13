@@ -16,21 +16,25 @@ import keyboard
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-v",help="Path to the video",required=True)
-ap.add_argument("-cv",help="Use openCV in embedding extraction",required=False,action="store_true")
+ap.add_argument("-o",help="Path to the output video",required=True)
 ap.add_argument("-d",help="Show information abou processing",required=False,action="store_true")
 ap.add_argument("-c",help="Minimum confidence to find face",required=False,type=float,default=0.7)
 ap.add_argument("-t",help="Tolerance of distance of faces",required=False,type=float,default=0.6)
+ap.add_argument("--model",help="Model to extract embeddings",required=False)
 args = vars(ap.parse_args())
 
 #Usar openCV para extrair embbedind do frame
-opencv = args["cv"]
+if args.get("model") == None:
+    opencv = False
+else:
+    opencv=True
+    print("[INFO] - Loading embedding model")
+    emb = cv2.dnn.readNetFromTorch(args["model"])
 
 print("[INFO] - Loading face detector")
 detector = cv2.dnn.readNetFromCaffe("models/face_detection_model/deploy.prototxt",
 			"models/face_detection_model/res10_300x300_ssd_iter_140000.caffemodel")
 
-print("[INFO] - Loading embedding model")
-emb = cv2.dnn.readNetFromTorch("models/nn4.v2.t7")
 
 print("[INFO] - Loading known embeddings")
 data = pickle.loads(open("known/embeddings.pickle","rb").read()) 
@@ -62,7 +66,7 @@ frame = imutils.resize(frame, width=600)
 #Caso precise rodar o video
 #frame = imutils.rotate(frame,angle=90)                
 
-out = VideoWriter("1Shot-output.avi",cv2.VideoWriter_fourcc(*'XVID'),vc.get(cv2.CAP_PROP_FPS),(frame.shape[1],frame.shape[0]))
+out = VideoWriter(args["o"]+".avi",cv2.VideoWriter_fourcc(*'XVID'),vc.get(cv2.CAP_PROP_FPS),(frame.shape[1],frame.shape[0]))
 
 bar = ProgressBar(vc.get(cv2.CAP_PROP_FRAME_COUNT)+1).start()
 bar.widgets.append(ETA())
@@ -107,6 +111,7 @@ while vc.isOpened():
 					encodings = face_recognition.face_encodings(rgb,model="cnn")
 					for enc in encodings:
 						frameEmb=enc
+				
 				
 				
 				matches = face_recognition.compare_faces(knownEmbeddings,frameEmb,tolerance=args["t"])

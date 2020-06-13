@@ -8,22 +8,33 @@ from progressbar import ProgressBar,ETA,FileTransferSpeed
 import time
 import face_recognition
 import dlib
+import argparse
+
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--model",help="Model to extract embeddings",required=False)
+args = vars(ap.parse_args())
+
+
+
 print("[INFO] - Loading face detector")
 detector = cv2.dnn.readNetFromCaffe("models/face_detection_model/deploy.prototxt",
             "models/face_detection_model/res10_300x300_ssd_iter_140000.caffemodel")
 
-print("[INFO] - Loading embedding model")
-emb = cv2.dnn.readNetFromTorch("models/nn4.v2.t7")
 
 print("[INFO] - Loading faces")
-imagePaths = list(paths.list_images("dataset"))
+imagePaths = list(paths.list_images("kaggle_dataset"))
 knownEmbeddings = []
 knownNames = []
 samples = {}
 
 ##Usar opencv para extrair embedding do rostos
-opencv = False
-
+if args.get("model") == None:
+    opencv = False
+else:
+    opencv=True
+    print("[INFO] - Loading embedding model")
+    emb = cv2.dnn.readNetFromTorch(args["model"])
 
 total = 0
 bar = ProgressBar(maxval=len(imagePaths)).start()
@@ -62,14 +73,13 @@ for (i,imagePath) in enumerate(imagePaths):
             if fW < 20 or fH <20:
                 continue
             
-            
-
             if opencv:
                 #Using openCV
                 faceBlob = cv2.dnn.blobFromImage(face,1.0/255,(96,96),(0,0,0),swapRB=True,crop=False)
                 emb.setInput(faceBlob)
                 vec = emb.forward()
                 knownNames.append(name)
+                samples[name] = samples.get(name,0)+1
                 knownEmbeddings.append(vec.flatten())
             else:    
                 #Using dlib
