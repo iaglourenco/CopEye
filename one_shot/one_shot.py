@@ -13,21 +13,24 @@ import argparse
 import keyboard
 
 ap = argparse.ArgumentParser()
-ap.add_argument("-cv",help="Use openCV in embedding extraction",required=False,action="store_true")
-ap.add_argument("-d",help="Show information abou processing",required=False,action="store_true")
-ap.add_argument("-c",help="Minimum confidence to find face",required=False,type=float,default=0.7)
+ap.add_argument("-d",help="Show information about processing",required=False,action="store_true")
+ap.add_argument("-c",help="Minimum confidence to find face",required=False,type=float,default=0.8)
 ap.add_argument("-t",help="Tolerance of distance of faces",required=False,type=float,default=0.6)
+ap.add_argument("--model",help="Model to extract embeddings",required=False)
+
 args = vars(ap.parse_args())
 
 #Usar openCV para extrair embbeding do frame
-opencv = args["cv"]
+if args.get("model") == None:
+    opencv = False
+else:
+    opencv=True
+    print("[INFO] - Loading embedding model")
+    emb = cv2.dnn.readNetFromTorch(args["model"])
 
 print("[INFO] - Loading face detector")
 detector = cv2.dnn.readNetFromCaffe("models/face_detection_model/deploy.prototxt",
 			"models/face_detection_model/res10_300x300_ssd_iter_140000.caffemodel")
-
-print("[INFO] - Loading embedding model")
-emb = cv2.dnn.readNetFromTorch("models/nn4.v2.t7")
 
 print("[INFO] - Loading known embeddings")
 data = pickle.loads(open("known/embeddings.pickle","rb").read()) 
@@ -56,7 +59,7 @@ while True:
 
 	frame = vs.read()
 	count+=1
-	#frame = imutils.resize(frame, width=600)
+	frame = imutils.resize(frame, width=600)
 	(h, w) = frame.shape[:2]
 	
 	imageBlob = cv2.dnn.blobFromImage(
@@ -90,6 +93,8 @@ while True:
 				encodings = face_recognition.face_encodings(rgb,model="cnn")
 				for enc in encodings:
 					frameEmb=enc
+			
+			
 			matches = face_recognition.compare_faces(knownEmbeddings,frameEmb,tolerance=args["t"])
 			name="Unknown"
 			
@@ -106,11 +111,14 @@ while True:
 				text = "{} : {}".format(name, proba)
 			
 				if args["d"]:
-						print("\nFrame#{}\nMatches={}\nSamples={}\nPredicted={}\n".format(count,counts,samples,name))
-			y = startY - 10 if startY - 10 > 10 else startY + 10	
+					print("\nFrame#{}\nMatches={}\nSamples={}\nPredicted={}\n".format(count,counts,samples,name))
+			
+
+
 			cv2.rectangle(frame, (startX, startY), (endX, endY),(0, 0, 255), 2)
+			y = startY - 10 if startY - 10 > 10 else startY + 10	
 			cv2.putText(frame, text, (startX, y),cv2.FONT_ITALIC,.45, (0, 00, 255), 2)
-	
+			
 	text2="{} faces".format(noDetected)
 	cv2.putText(frame,text2,(20,30),cv2.FONT_ITALIC,.60,(0,0,255),2)	
 	cv2.imshow("Frame", frame)
