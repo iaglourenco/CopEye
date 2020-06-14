@@ -8,7 +8,7 @@ import sys
 
 
 
-def test_hyperparams():
+def test_hyperparams(data,labels):
     params ={"C":[0.0001,0.1,0.14,1.0,2.0,3.0],
     "gamma":[1e-1,1e-3,1e-4],
     "kernel":["rbf","linear","poly","sigmoid"],
@@ -41,18 +41,14 @@ if len(sys.argv) > 1:
 else:
     recognizer = SVC(
             C=1.0,
-            coef0=3.0,
-            degree=5,
-            gamma=0.1,
-            kernel="poly",
-            tol=0.0001,
-            decision_function_shape="ovo",
+            kernel="rbf",
             probability=True)
 
 
+init = time.time()
 recognizer.fit(data["embeddings"],labels)
-print("[INFO] - Training complete")
-#best hyperparameters: {'C': 1.0, 'coef0': 3.0, 'decision_function_shape': 'ovo', 'degree': 5, 'gamma': 0.1, 'kernel': 'poly', 'tol': 0.0001}
+end = time.time()
+print("[INFO] - Training complete, {} seconds".format(end-init))
 print("[INFO] - Saving data")
 f = open("pickle/recog.pickle", "wb")
 f.write(pickle.dumps(recognizer))

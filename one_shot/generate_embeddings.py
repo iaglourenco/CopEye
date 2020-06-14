@@ -23,7 +23,7 @@ detector = cv2.dnn.readNetFromCaffe("models/face_detection_model/deploy.prototxt
 
 
 print("[INFO] - Loading faces")
-imagePaths = list(paths.list_images("kaggle_dataset"))
+imagePaths = list(paths.list_images("kaggle_dataset_full"))
 knownEmbeddings = []
 knownNames = []
 samples = {}
@@ -84,7 +84,8 @@ for (i,imagePath) in enumerate(imagePaths):
             else:    
                 #Using dlib
                 rgb=cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
-                encodings = face_recognition.face_encodings(rgb,model="cnn")
+                locations = face_recognition.face_locations(rgb,model="cnn")
+                encodings = face_recognition.face_encodings(rgb,locations,model="small")
                 for enc in encodings:
                     knownEmbeddings.append(enc)
                     knownNames.append(name)

@@ -102,6 +102,7 @@ while vc.isOpened():
 			
 				if fW < 20 or fH < 20:
 					continue
+				
 				if opencv:
 					faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,(96, 96), (0, 0, 0), swapRB=True, crop=False)
 					emb.setInput(faceBlob)
@@ -125,11 +126,22 @@ while vc.isOpened():
 						name =knownNames[i]
 						counts[name] = counts.get(name,0) + 1
 						
-						if args["d"]:
-							print("\nFrame#{}\nMatches={}\nSamples={}\nPredicted={}\n".format(count,counts,samples,name))
 					name = max(counts,key=counts.get)
-					proba = "{}/{}".format(counts[name],samples[name])
-					text = "{} : {}".format(name, proba)
+					conf =(counts[name]*100)/samples[name]
+					proba = "{:.2f}%".format(conf)
+					
+					if conf/100 > 0.8: 
+						text = "{} : {}".format(name, proba)
+					else:
+						name="Unknown"
+						
+					matchesConfidences = {}
+					for d in counts.items():
+						matchesConfidences[d[0]] = "{:.2f}%".format( (d[1]*100) / samples[d[0]])  
+					
+					if args["d"]:
+						print("\nFrame#{}\nMatches = {}\n\nPredicted = {}\nConfidence = {}\n".format(count,matchesConfidences,name,proba))
+					
 
 				
 				

@@ -84,6 +84,7 @@ while True:
 			
 			if fW < 20 or fH < 20:
 				continue
+			
 			if opencv:
 				faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,(96, 96), (0, 0, 0), swapRB=True, crop=False)
 				emb.setInput(faceBlob)
@@ -94,11 +95,11 @@ while True:
 				for enc in encodings:
 					frameEmb=enc
 			
-			
+
 			matches = face_recognition.compare_faces(knownEmbeddings,frameEmb,tolerance=args["t"])
 			name="Unknown"
-			
 			text = "{}".format(name)
+			
 			if True in matches:
 				counts={}
 				indexes = [i for (i,b) in enumerate(matches)if b]
@@ -106,14 +107,22 @@ while True:
 					name =knownNames[i]
 					counts[name] = counts.get(name,0) + 1
 					
-				name = max(counts,key=counts.get) 
-				proba = "{}/{}".format(counts[name],samples[name])
-				text = "{} : {}".format(name, proba)
-			
+				name = max(counts,key=counts.get)
+				conf =(counts[name]*100)/samples[name]
+				proba = "{:.2f}%".format(conf)
+				
+				if conf/100 > 0.8: 
+					text = "{} : {}".format(name, proba)
+				else:
+					name="Unknown"
+					
+				matchesConfidences = {}
+				for d in counts.items():
+					matchesConfidences[d[0]] = "{:.2f}%".format( (d[1]*100) / samples[d[0]])  
+				
 				if args["d"]:
-					print("\nFrame#{}\nMatches={}\nSamples={}\nPredicted={}\n".format(count,counts,samples,name))
-			
-
+					print("\nFrame#{}\nMatches = {}\n\nPredicted = {}\nConfidence = {}\n".format(count,matchesConfidences,name,proba))
+					
 
 			cv2.rectangle(frame, (startX, startY), (endX, endY),(0, 0, 255), 2)
 			y = startY - 10 if startY - 10 > 10 else startY + 10	
