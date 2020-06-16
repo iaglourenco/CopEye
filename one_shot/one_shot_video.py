@@ -182,15 +182,15 @@ while vc.isOpened():
 			exit()
 		
 	else:
+		fps.stop()
+		print("[INFO] - elapsed time: {:.2f}".format(fps.elapsed()))
+		print("[INFO] - approx. FPS: {:.2f}".format(fps.fps()))	
 		vc.release()
 		out.release()
 		bar.finish()
 		cv2.destroyAllWindows()
 		exit()
 
-print("Finished")
-fps.stop()
-print("[INFO] - elapsed time: {:.2f}".format(fps.elapsed()))
-print("[INFO] - approx. FPS: {:.2f}".format(fps.fps()))
+
 
 	 
