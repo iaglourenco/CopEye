@@ -74,7 +74,6 @@ bar = ProgressBar(vc.get(cv2.CAP_PROP_FRAME_COUNT)+1).start()
 bar.widgets.append(ETA())
 count=1
 pause = False
-
 print("[INFO] - Processing video - Press 'p' to pause and 'q' to quit")
 while vc.isOpened():
 
@@ -82,9 +81,10 @@ while vc.isOpened():
 	bar.update(count+1)
 	count+=1
 	if ret == True:
-		frame = imutils.resize(frame, width=600,)
+		frame = imutils.resize(frame, width=600)
 		#frame = imutils.rotate(frame,angle=90)
 		(h, w) = frame.shape[:2]
+		frameOut = np.copy(frame)
 			
 		imageBlob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 1.0, (300, 300),(104.0, 177.0, 123.0), swapRB=False, crop=False)
 		detector.setInput(imageBlob)
@@ -104,6 +104,9 @@ while vc.isOpened():
 			
 				if fW < 20 or fH < 20:
 					continue
+
+				if noDetected > 0:
+					cv2.imshow("Face",face)
 				
 				if opencv:
 					faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,(96, 96), (0, 0, 0), swapRB=True, crop=False)
@@ -111,7 +114,7 @@ while vc.isOpened():
 					frameEmb = emb.forward()		
 				else:
 					rgb = cv2.cvtColor(face,cv2.COLOR_BGR2RGB)
-					encodings = face_recognition.face_encodings(rgb,model="cnn")
+					encodings = face_recognition.face_encodings(rgb,model="large")
 					for enc in encodings:
 						frameEmb=enc
 				
@@ -120,7 +123,8 @@ while vc.isOpened():
 				matches = face_recognition.compare_faces(knownEmbeddings,frameEmb,tolerance=args["t"])
 				name="Unknown"
 				text = "{}".format(name)
-				
+				matchesConfidences = {}
+					
 				if True in matches:
 					indexes = [i for (i,b) in enumerate(matches)if b]
 					counts = {}
@@ -137,27 +141,25 @@ while vc.isOpened():
 					else:
 						name="Unknown"
 						
-					matchesConfidences = {}
 					for d in counts.items():
 						matchesConfidences[d[0]] = "{:.2f}%".format( (d[1]*100) / samples[d[0]])  
 					
-					if args["d"]:
-						print("\nFrame#{}\nMatches = {}\n\nPredicted = {}\nConfidence = {}\n".format(count,matchesConfidences,name,proba))
+				if args["d"]:
+					print("\nFrame#{}\nMatches = {}\n\nPredicted = {}\nConfidence = {}\n".format(count,matchesConfidences,name,proba))
 					
 
-				
-				
 				y = startY - 10 if startY - 10 > 10 else startY + 10
-				cv2.rectangle(frame, (startX, startY), (endX, endY),(0, 0, 255), 2)
-				cv2.putText(frame, text, (startX, y),cv2.FONT_ITALIC,.45, (0, 0, 255), 2)
+				cv2.rectangle(frameOut, (startX, startY), (endX, endY),(0, 0, 255), 2)
+				cv2.putText(frameOut, text, (startX, y),cv2.FONT_ITALIC,.45, (0, 0, 255), 2)
 		
 
 
 		text2="{} faces".format(noDetected)
-		cv2.putText(frame,text2,(20,30),cv2.FONT_ITALIC,.60,(0,0,255),2)	
+		cv2.putText(frameOut,text2,(20,30),cv2.FONT_ITALIC,.60,(0,0,255),2)	
+		
 		noDetected=0
-		out.write(frame)
-		cv2.imshow("Output Preview",frame)
+		out.write(frameOut)
+		cv2.imshow("Output Preview",frameOut)		
 		fps.update()
 
 		key = cv2.waitKey(1) & 0xFF
@@ -186,5 +188,9 @@ while vc.isOpened():
 		cv2.destroyAllWindows()
 		exit()
 
+print("Finished")
+fps.stop()
+print("[INFO] - elapsed time: {:.2f}".format(fps.elapsed()))
+print("[INFO] - approx. FPS: {:.2f}".format(fps.fps()))
 
 	 

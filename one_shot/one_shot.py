@@ -16,6 +16,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("-d",help="Show information about processing",required=False,action="store_true")
 ap.add_argument("-c",help="Minimum confidence to find face",required=False,type=float,default=0.8)
 ap.add_argument("-t",help="Tolerance of distance of faces",required=False,type=float,default=0.6)
+ap.add_argument("-p",help="Minimum confidence to predict a person, matches in dataset",required=False,type=float,default=0.6)
 ap.add_argument("--model",help="Model to extract embeddings",required=False)
 
 args = vars(ap.parse_args())
@@ -91,7 +92,7 @@ while True:
 				frameEmb = emb.forward()		
 			else:
 				rgb = cv2.cvtColor(face,cv2.COLOR_BGR2RGB)
-				encodings = face_recognition.face_encodings(rgb,model="cnn")
+				encodings = face_recognition.face_encodings(rgb,model="large")
 				for enc in encodings:
 					frameEmb=enc
 			
@@ -111,7 +112,7 @@ while True:
 				conf =(counts[name]*100)/samples[name]
 				proba = "{:.2f}%".format(conf)
 				
-				if conf/100 > 0.8: 
+				if conf/100 > args["p"]: 
 					text = "{} : {}".format(name, proba)
 				else:
 					name="Unknown"

@@ -36,10 +36,10 @@ options.oversampling_amount = 20
 options.oversampling_translation_jitter=0
 
 detectorAlign = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor("./models/shape_predictor_5_face_landmarks.dat")
+predictor = dlib.shape_predictor("../one_shot/models/shape_predictor_5_face_landmarks.dat")
 fa = FaceAligner(predictor,desiredFaceHeight=256)
 
-detectorFace = cv2.dnn.readNetFromCaffe("models/face_detection_model/deploy.prototxt","models/face_detection_model/res10_300x300_ssd_iter_140000.caffemodel")
+detectorFace = cv2.dnn.readNetFromCaffe("../one_shot/models/face_detection_model/deploy.prototxt","../one_shot/models/face_detection_model/res10_300x300_ssd_iter_140000.caffemodel")
 vs = VideoStream(src=0,resolution=(1920,1080)).start()
 time.sleep(2)
 total=1

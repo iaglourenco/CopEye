@@ -42,7 +42,6 @@ bar.widgets.append(ETA())
 bar.widgets.append(FileTransferSpeed(unit="img"))
 for (i,imagePath) in enumerate(imagePaths):   
     name = imagePath.split(os.path.sep)[-2]
-    
     image = cv2.imread(imagePath)
     image = imutils.resize(image,width=600)
     (h,w)= image.shape[:2]
@@ -62,7 +61,7 @@ for (i,imagePath) in enumerate(imagePaths):
     if len(detections) > 0:
         j = np.argmax(detections[0,0,:,2])
         confidence = detections[0,0,j,2]
-        if confidence > 0.6:
+        if confidence > 0.5:
         
             box=detections[0,0,j,3:7] * np.array([w,h,w,h])
             (startX,startY,endX,endY)=box.astype("int")
@@ -85,7 +84,7 @@ for (i,imagePath) in enumerate(imagePaths):
                 #Using dlib
                 rgb=cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
                 locations = face_recognition.face_locations(rgb,model="cnn")
-                encodings = face_recognition.face_encodings(rgb,locations,model="small")
+                encodings = face_recognition.face_encodings(rgb,locations,model="large")
                 for enc in encodings:
                     knownEmbeddings.append(enc)
                     knownNames.append(name)
