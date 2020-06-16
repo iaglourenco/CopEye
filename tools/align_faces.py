@@ -23,7 +23,7 @@ print("[INFO] - Loaded {} images".format(len(imagePaths)))
 
 
 detector = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor("./models/shape_predictor_68_face_landmarks.dat")
+predictor = dlib.shape_predictor("../one_shot/models/shape_predictor_68_face_landmarks.dat")
 fa = FaceAligner(predictor,desiredFaceHeight=256)
 
 options = dlib.shape_predictor_training_options()

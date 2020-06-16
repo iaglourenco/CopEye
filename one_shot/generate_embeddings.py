@@ -23,7 +23,7 @@ detector = cv2.dnn.readNetFromCaffe("models/face_detection_model/deploy.prototxt
 
 
 print("[INFO] - Loading faces")
-imagePaths = list(paths.list_images("kaggle_dataset_full"))
+imagePaths = list(paths.list_images("b99_cast"))
 knownEmbeddings = []
 knownNames = []
 samples = {}

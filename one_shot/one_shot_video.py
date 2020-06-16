@@ -17,9 +17,10 @@ import keyboard
 ap = argparse.ArgumentParser()
 ap.add_argument("-v",help="Path to the video",required=True)
 ap.add_argument("-o",help="Path to the output video",required=True)
-ap.add_argument("-d",help="Show information abou processing",required=False,action="store_true")
+ap.add_argument("-d",help="Show information about processing",required=False,action="store_true")
 ap.add_argument("-c",help="Minimum confidence to find face",required=False,type=float,default=0.7)
 ap.add_argument("-t",help="Tolerance of distance of faces",required=False,type=float,default=0.6)
+ap.add_argument("-p",help="Minimum confidence to predict a person, matches in dataset",required=False,type=float,default=0.6)
 ap.add_argument("--model",help="Model to extract embeddings",required=False)
 args = vars(ap.parse_args())
 
@@ -68,6 +69,7 @@ frame = imutils.resize(frame, width=600)
 
 out = VideoWriter(args["o"]+".avi",cv2.VideoWriter_fourcc(*'XVID'),vc.get(cv2.CAP_PROP_FPS),(frame.shape[1],frame.shape[0]))
 
+fps = FPS().start()
 bar = ProgressBar(vc.get(cv2.CAP_PROP_FRAME_COUNT)+1).start()
 bar.widgets.append(ETA())
 count=1
@@ -130,7 +132,7 @@ while vc.isOpened():
 					conf =(counts[name]*100)/samples[name]
 					proba = "{:.2f}%".format(conf)
 					
-					if conf/100 > 0.8: 
+					if conf/100 > args["p"]: 
 						text = "{} : {}".format(name, proba)
 					else:
 						name="Unknown"
@@ -156,7 +158,8 @@ while vc.isOpened():
 		noDetected=0
 		out.write(frame)
 		cv2.imshow("Output Preview",frame)
-			
+		fps.update()
+
 		key = cv2.waitKey(1) & 0xFF
 		if key == ord("p"):
 			pause=True
@@ -167,6 +170,9 @@ while vc.isOpened():
 					pause = False
 		if key == ord("q"):
 			print("Stopped by the user")
+			fps.stop()
+			print("[INFO] - elapsed time: {:.2f}".format(fps.elapsed()))
+			print("[INFO] - approx. FPS: {:.2f}".format(fps.fps()))
 			vc.release()
 			out.release()
 			cv2.destroyAllWindows()
