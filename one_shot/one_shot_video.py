@@ -134,7 +134,7 @@ while vc.isOpened():
 						
 					name = max(counts,key=counts.get)
 					conf =(counts[name]*100)/samples[name]
-					proba = "{:.2f}%".format(conf)
+					proba = "{}/{}".format(counts[name],samples[name])
 					
 					if conf/100 > args["p"]: 
 						text = "{} : {}".format(name, proba)
@@ -142,7 +142,7 @@ while vc.isOpened():
 						name="Unknown"
 						
 					for d in counts.items():
-						matchesConfidences[d[0]] = "{:.2f}%".format( (d[1]*100) / samples[d[0]])  
+						matchesConfidences[d[0]] = "{}/{}".format(d[1],samples[d[0]])  
 					
 				if args["d"]:
 					print("\nFrame#{}\nMatches = {}\n\nPredicted = {}\nConfidence = {}\n".format(count,matchesConfidences,name,proba))
@@ -179,6 +179,7 @@ while vc.isOpened():
 			out.release()
 			cv2.destroyAllWindows()
 			bar.finish()
+			time.sleep(2)
 			exit()
 		
 	else:
@@ -189,6 +190,7 @@ while vc.isOpened():
 		out.release()
 		bar.finish()
 		cv2.destroyAllWindows()
+		time.sleep(2)
 		exit()
 
 
