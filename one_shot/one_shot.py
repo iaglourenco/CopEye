@@ -17,98 +17,109 @@ ap.add_argument("-d",help="Show information about processing",required=False,act
 ap.add_argument("-c",help="Minimum confidence to find face",required=False,type=float,default=0.8)
 ap.add_argument("-t",help="Tolerance of distance of faces",required=False,type=float,default=0.6)
 ap.add_argument("-p",help="Minimum confidence to predict a person, matches in dataset",required=False,type=float,default=0.6)
-ap.add_argument("--model",help="Model to extract embeddings",required=False)
+ap.add_argument("--dlib",help="Model to extract embeddings",required=False)
 
 args = vars(ap.parse_args())
 
-#Usar openCV para extrair embbeding do frame
-if args.get("model") == None:
+if args.get("dlib") == None:
+	#Use dlib embeddings extractor
     opencv = False
 else:
+#Use openCV model to extract embeddings
     opencv=True
     print("[INFO] - Loading embedding model")
     emb = cv2.dnn.readNetFromTorch(args["model"])
 
+
+#Face detector, return the position of the faces in the image
 print("[INFO] - Loading face detector")
 detector = cv2.dnn.readNetFromCaffe("models/face_detection_model/deploy.prototxt",
 			"models/face_detection_model/res10_300x300_ssd_iter_140000.caffemodel")
 
+# Dataset with the embbedings knowned, frames will be compared with each face here
 print("[INFO] - Loading known embeddings")
 data = pickle.loads(open("known/embeddings.pickle","rb").read()) 
 knownEmbeddings = []
 knownNames = []
 samples = {}
 
+#Loading to variables
 for e in data["embeddings"]:
 	knownEmbeddings.append(e)
 
 for n in data["names"]:
 	knownNames.append(n)
 
+#Number of face samples for each person in the database
 samples = data["samples"]
+
 
 print("[INFO] - Starting video stream - Press 'p' to pause and 'q' to quit")
 vs = VideoStream(src=0,resolution=(1920,1080)).start()
 time.sleep(2.0)
 
 fps = FPS().start()
+
+#Initializing variables
 noDetected=0
 frameEmb = np.empty((128,))
 proba = 0
-count=0
+count = 0
+name="Unknown"
+text = "{}".format(name)
 while True:
 
-	frame = vs.read()
-	count+=1
-	frame = imutils.resize(frame, width=600)
-	(h, w) = frame.shape[:2]
+	frame = vs.read() # Read a frame
+	count+=1 #Frame counter
+	# frame = imutils.resize(frame, width=600) #Rezising to extract the Blob after
+	(h, w) = frame.shape[:2] # Get the height and weight of the resized image
 	
-	imageBlob = cv2.dnn.blobFromImage(
+	imageBlob = cv2.dnn.blobFromImage( #Extract the blob of image to put in detector
 		cv2.resize(frame, (300, 300)), 1.0, (300, 300),
 		(104.0, 177.0, 123.0), swapRB=False, crop=False)
 	
 	
-	detector.setInput(imageBlob)
+	detector.setInput(imageBlob) # Realize detection
 	detections = detector.forward()
 	
-	for i in range(0, detections.shape[2]):
+	for i in range(0, detections.shape[2]):# For each face detected
 				
-		confidence = detections[0, 0, i, 2]
-		if confidence > args["c"]:
-			noDetected+=1
-			box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-			(startX, startY, endX, endY) = box.astype("int")
-			face = frame[startY:endY, startX:endX]
-			(fH, fW) = face.shape[:2]
-			if fW > 250 or fH > 340:
-				break
+		confidence = detections[0, 0, i, 2]#Extract the confidence returned by the detector
+		if confidence > args["c"]: #Compare with the confidence passed by argument
+			noDetected+=1 #Faces detected in the frame counter
+			box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])# Convert the positions to a np.array
+			(startX, startY, endX, endY) = box.astype("int")# Get the coordinates to cut the face from the frame
+			face = frame[startY:endY, startX:endX] #Extract the face from the frame
+			(fH, fW) = face.shape[:2]# Get the face height and weight
 			
-			if fW < 20 or fH < 20:
+			if fW < 20 or fH < 20: #Discard the small faces
 				continue
 			
-			if opencv:
+			if opencv:#Using openCV to extract the frame embeddings
 				faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,(96, 96), (0, 0, 0), swapRB=True, crop=False)
 				emb.setInput(faceBlob)
 				frameEmb = emb.forward()		
-			else:
+			else:#Using dlib to extract the embeddings
 				rgb = cv2.cvtColor(face,cv2.COLOR_BGR2RGB)
 				encodings = face_recognition.face_encodings(rgb,model="large")
 				for enc in encodings:
 					frameEmb=enc
 			
 
+			#Compare the face embedding of te frame with all faces registered on the dataset 
 			matches = face_recognition.compare_faces(knownEmbeddings,frameEmb,tolerance=args["t"])
-			name="Unknown"
-			text = "{}".format(name)
 			
+			#If a match has found
 			if True in matches:
 				counts={}
 				indexes = [i for (i,b) in enumerate(matches)if b]
-				for i in indexes:
-					name =knownNames[i]
+			#For each true in matches get the embedding
+				
+				for i in indexes:#For each match count the matches and get the name
+					name = knownNames[i]
 					counts[name] = counts.get(name,0) + 1
 					
-				name = max(counts,key=counts.get)
+				name = max(counts,key=counts.get) # Get the name with more matches
 				conf =(counts[name]*100)/samples[name]
 				proba = "{}/{}".format(counts[name],samples[name])
 				
