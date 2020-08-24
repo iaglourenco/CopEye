@@ -17,7 +17,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("-d",help="show information about processing",required=False,action="store_true")
 ap.add_argument("-c",help="minimum confidence to find face on the frame",required=False,type=float,default=0.8)
 ap.add_argument("-p",help="minimum confidence to predict a person, matches in dataset",required=False,type=float,default=0.55)
-ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.6)
+ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.7)
 ap.add_argument("--dlib",help="use dlib's model to extract embeddings",required=False,action="store_true")
 
 args = vars(ap.parse_args())
@@ -137,22 +137,38 @@ while True:
 
 				faceDistances={}
 				matchCount={}
+				matchInfo={}
 				for (i,d) in enumerate(distances):
 					if d <= args["t"]:
-						matchCount[i] = matchCount.get(i,0)+1
+
+						n = knownNames[i]
+						matchCount[n] = matchCount.get(n,0)+1
+						matchInfo[n+"distance"] = faceDistances.get(i,max(distances))
+						if matchInfo.get(n+"distance",0) > d:
+							matchInfo[n+"index"] = i;
+							matchInfo[n+"distance"] = d
 					
 					faceDistances[i] = faceDistances.get(i,max(distances))
 					if d < faceDistances[i]: 
 						faceDistances[i]=d
 							
 				ind = min(faceDistances,key=faceDistances.get) # Get the name with minimum distance
-				if len(matchCount) >0:
-					ind = max(matchCount,key=matchCount.get)
-				
-				name = knownNames[ind]				
-				faceComparedPath = facePaths[ind]
 				distance = faceDistances.get(ind)
 				probability = max(distances) - distance
+
+				if len(matchCount) > 0:
+					matchName = max(matchCount,key=matchCount.get)
+					matchInd = matchInfo.get(matchName+"index")
+					matchDis = matchInfo.get(matchName+"distance")
+					nOfMatches = (matchCount.get(matchName))
+					if matchDis <= distance and nOfMatches > 1:
+						ind = matchInd
+						name = knownNames[ind]
+						probability = max(distances) - distance/nOfMatches
+						
+						 
+				name = knownNames[ind]				
+				faceComparedPath = facePaths[ind]
 				
 				if probability >= args["p"] : 
 					text = "#{}-{} : {:.2f}%".format(f,name, probability*100)
@@ -165,7 +181,7 @@ while True:
 
 
 				if args["d"]:
-						print("\nFace#{}\nLooks like = {}\nPredicted = {}\nDistance = {}\nProbability = {:.2f}%\nMatch count = {}\n".format(f,knownNames[ind],name,distance,probability*100,matchCount.get(ind,-1)))
+						print("\nFace#{}\nLooks like = {}\nPredicted = {}\nDistance = {}\nProbability = {:.2f}%\nMatch count = {}\n".format(f,knownNames[ind],name,distance,probability*100,matchCount.get(name,-1)))
 
 				y = startY - 10 if startY - 10 > 10 else startY + 10	
 				cv2.rectangle(frame, (startX, startY), (endX, endY),(0, 0, 255), 2)

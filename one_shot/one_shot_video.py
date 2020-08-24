@@ -141,34 +141,51 @@ while vc.isOpened():
 				
 				faceDistances={}
 				matchCount={}
+				matchInfo={}
 				for (i,d) in enumerate(distances):
 					if d <= args["t"]:
-						matchCount[i] = matchCount.get(i,0)+1
+
+						n = knownNames[i]
+						matchCount[n] = matchCount.get(n,0)+1
+						matchInfo[n+"distance"] = faceDistances.get(i,max(distances))
+						if matchInfo.get(n+"distance",0) > d:
+							matchInfo[n+"index"] = i;
+							matchInfo[n+"distance"] = d
 					
 					faceDistances[i] = faceDistances.get(i,max(distances))
 					if d < faceDistances[i]: 
 						faceDistances[i]=d
 							
 				ind = min(faceDistances,key=faceDistances.get) # Get the name with minimum distance
-				if len(matchCount) >0:
-					ind = max(matchCount,key=matchCount.get)
-				
-				name = knownNames[ind]				
-				faceComparedPath = facePaths[ind]
 				distance = faceDistances.get(ind)
 				probability = max(distances) - distance
 
+				if len(matchCount) > 0:
+					matchName = max(matchCount,key=matchCount.get)
+					matchInd = matchInfo.get(matchName+"index")
+					matchDis = matchInfo.get(matchName+"distance")
+					nOfMatches = (matchCount.get(matchName))
+					if matchDis <= distance and nOfMatches > 1:
+						ind = matchInd
+						name = knownNames[ind]
+						probability = max(distances) - distance/nOfMatches
+						
+						 
+				name = knownNames[ind]				
+				faceComparedPath = facePaths[ind]
+				
 				if probability >= args["p"] : 
 					text = "#{}-{} : {:.2f}%".format(f,name, probability*100)
 				else:
 					name="Unknown"
-				
 				faceCompared = cv2.imread(faceComparedPath)
 				imutils.resize(faceCompared,width=600,height=600)
 				cv2.imshow("Face#{} Best match".format(f),faceCompared)
 				
+
+
 				if args["d"]:
-						print("\nFace#{}\nLooks like = {}\nPredicted = {}\nDistance = {}\nProbability = {:.2f}%\nMatch count = {}\n".format(f,knownNames[ind],name,distance,probability*100,matchCount.get(ind,-1)))
+						print("\nFace#{}\nLooks like = {}\nPredicted = {}\nDistance = {}\nProbability = {:.2f}%\nMatch count = {}\n".format(f,knownNames[ind],name,distance,probability*100,matchCount.get(name,-1)))
 
 				y = startY - 10 if startY - 10 > 10 else startY + 10
 				cv2.rectangle(frameOut, (startX, startY), (endX, endY),(0, 0, 255), 1)
