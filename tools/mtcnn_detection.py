@@ -31,7 +31,18 @@ while True:
 			x,y,w,h =face['box']
 			
 			text = "{}: {:.2f}%".format(name, confidence*100)
+			kp = face['keypoints']
 			
+
+			cv2.line(frame,kp['left_eye'],kp['left_eye'],(0,0,255),6)
+			cv2.line(frame,kp['right_eye'],kp['right_eye'],(0,0,255),6)
+			
+			cv2.line(frame,kp['mouth_left'],kp['mouth_left'],(0,0,255),6)
+			cv2.line(frame,kp['mouth_right'],kp['mouth_right'],(0,0,255),6)
+			
+			cv2.line(frame,kp['nose'],kp['nose'],(0,0,255),6)
+			
+
 			cv2.rectangle(frame, (x, y), (x+w, y+h),(0, 0, 255), 1)
 			
 			cv2.putText(frame, text, (x, y-10),cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
@@ -49,3 +60,4 @@ print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
 
 cv2.destroyAllWindows()
 vs.stop()
+time.sleep(2.0)
