@@ -16,7 +16,8 @@ import keyboard
 ap = argparse.ArgumentParser()
 ap.add_argument("-d",help="show information about processing",required=False,action="store_true")
 ap.add_argument("-c",help="minimum confidence to find face on the frame",required=False,type=float,default=0.8)
-ap.add_argument("-p",help="minimum confidence to predict a person, matches in dataset",required=False,type=float,default=0.6)
+ap.add_argument("-p",help="minimum confidence to predict a person, matches in dataset",required=False,type=float,default=0.55)
+ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.6)
 ap.add_argument("--dlib",help="use dlib's model to extract embeddings",required=False,action="store_true")
 
 args = vars(ap.parse_args())
@@ -47,7 +48,7 @@ print("[INFO] - Loading known embeddings")
 data = pickle.loads(open("known/embeddings.pickle","rb").read()) 
 knownEmbeddings = []
 knownNames = []
-samples = {}
+facePaths = []
 
 #Loading to variables
 for e in data["embeddings"]:
@@ -56,109 +57,123 @@ for e in data["embeddings"]:
 for n in data["names"]:
 	knownNames.append(n)
 
-#Number of face samples for each person in the database
-samples = data["samples"]
+#facePaths for each person in the database
+for fp in data["facePaths"]:
+	facePaths.append(fp)
 
 
 print("[INFO] - Starting video stream - Press 'p' to pause and 'q' to quit")
-vs = VideoStream(src=0,resolution=(1920,1080)).start()
+vs = VideoStream(src=0,resolution=(1280,720)).start()
 time.sleep(2.0)
 
 
-fps = FPS().start()
 
 #Initializing variables
 noDetected=0
-frameEmb = np.empty((128,))
-proba = 0
+count=1
+fps = FPS().start()
+
 while True:
 	
-	name="Unknown"
-	text = "{}".format(name)
-	frame = vs.read() # Read a frame
-	#frame = imutils.resize(frame, width=600) #Rezising to extract the Blob after
-	(h, w) = frame.shape[:2] # Get the height and weight of the resized image
-	
-	imageBlob = cv2.dnn.blobFromImage( #Extract the blob of image to put in detector
-		cv2.resize(frame, (300, 300)), 1.0, (300, 300),
-		(104.0, 177.0, 123.0), swapRB=False, crop=False)
-	
-	
-	detector.setInput(imageBlob) # Realize detection
-	detections = detector.forward()
-	
-	for f in range(0, detections.shape[2]):# For each face detected
-				
-		confidence = detections[0, 0, f, 2]#Extract the confidence returned by the detector
-		if confidence >= args["c"]: #Compare with the confidence passed by argument
-			noDetected+=1 #Faces detected in the frame counter
-			box = detections[0, 0, f, 3:7] * np.array([w, h, w, h])# Convert the positions to a np.array
-			(startX, startY, endX, endY) = box.astype("int")# Get the coordinates to cut the face from the frame
-			face = frame[startY:endY, startX:endX] #Extract the face from the frame
-			
-			al = np.copy(frame)
-			gray=cv2.cvtColor(al,cv2.COLOR_BGR2GRAY)
-			
-			face = fa.align(al,
-			gray,
-			dlib.rectangle(startX,startY,endX,endY))
+	count+=1
+	if count % 2 == 0:
+		fps.update()
+		noDetected=0
+		name="Unknown"
+		text = "{}".format(name)
+		frame = vs.read() # Read a frame
+		frame = imutils.resize(frame, width=600) #Rezising to extract the Blob after
+		(h, w) = frame.shape[:2] # Get the height and weight of the resized image
 
-		
-			# (fH, fW) = face.shape[:2]# Get the face height and weight			
-			# if fW > 250 or fH > 340:
-			# 		break
+		imageBlob = cv2.dnn.blobFromImage( #Extract the blob of image to put in detector
+			cv2.resize(frame, (300, 300)), 1.0, (300, 300),
+			(104.0, 177.0, 123.0), swapRB=False, crop=False)
 
-			# if fW < 20 or fH < 20: #Discard the small faces
-			# 	continue
-			
-			if noDetected > 0:
-				cv2.imshow("Face#{}".format(f),face)
-			
-			if opencv:#Using openCV to extract the frame embeddings
-				faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,(96, 96), (0, 0, 0), swapRB=True, crop=False)
-				emb.setInput(faceBlob)
-				frameEmb = emb.forward()		
-				frameEmb = frameEmb.flatten()
-			else:#Using dlib to extract the embeddings
-				rgb = cv2.cvtColor(face,cv2.COLOR_BGR2RGB)
-				encodings = face_recognition.face_encodings(rgb,num_jitters=2,model="large")
-				for enc in encodings:
-					frameEmb=enc
-			
 
-			#Compare the face embedding of te frame with all faces registered on the dataset
-			distances = face_recognition.face_distance(knownEmbeddings,frameEmb)
-			
-			
-			faceDistances={}
-			for (i,d) in enumerate(distances):
-				n = knownNames[i]
-				faceDistances[n] = faceDistances.get(n,max(distances))
-				if d < faceDistances[n]: 
-					faceDistances[n]=d
+		detector.setInput(imageBlob) # Realize detection
+		detections = detector.forward()
 
-			
-			name = min(faceDistances,key=faceDistances.get) # Get the name with more matches
-			distance = faceDistances.get(name)
-			accuracy = max(distances) - distance
-			if distance <= args["p"]: 
-				text = "#{}-{} : {:.2f}%".format(f,name, accuracy*100)
-			else:
-				name="Unknown"
-		
-		
-			if args["d"]:
-					print("\nFace#{}\nLooks like = {}\nPredicted = {}\nDistance = {}\nAccuracy = {:.2f}%\n".format(f,min(faceDistances,key=faceDistances.get),name,distance,accuracy*100))
+		for f in range(0, detections.shape[2]):# For each face detected
+
+			confidence = detections[0, 0, f, 2]#Extract the confidence returned by the detector
+			if confidence >= args["c"]: #Compare with the confidence passed by argument
+				noDetected+=1 #Faces detected in the frame counter
+				box = detections[0, 0, f, 3:7] * np.array([w, h, w, h])# Convert the positions to a np.array
+				(startX, startY, endX, endY) = box.astype("int")# Get the coordinates to cut the face from the frame
+				face = frame[startY:endY, startX:endX] #Extract the face from the frame
+				(fH, fW) = face.shape[:2]# Get the face height and weight			
+				if fW > 250 or fH > 340 or fW < 20 or fH < 20:
+						continue
+
+
 					
-			y = startY - 10 if startY - 10 > 10 else startY + 10	
-			cv2.rectangle(frame, (startX, startY), (endX, endY),(0, 0, 255), 2)
-			cv2.putText(frame, text, (startX, y),cv2.FONT_ITALIC,.45, (0, 00, 255), 2)
+				al = np.copy(frame)
+				gray=cv2.cvtColor(al,cv2.COLOR_BGR2GRAY)
+
+				face = fa.align(al,
+				gray,
+				dlib.rectangle(startX,startY,endX,endY))
+
+
+				if noDetected > 0:
+					cv2.imshow("Face#{}".format(f),face)
+
+				frameEmb = np.empty(128,)
+				if opencv:#Using openCV to extract the frame embeddings
+					faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,(96, 96), (0, 0, 0), swapRB=True, crop=False)
+					emb.setInput(faceBlob)
+					frameEmb = emb.forward()		
+					frameEmb = frameEmb.flatten()
+				else:#Using dlib to extract the embeddings
+					rgb = cv2.cvtColor(face,cv2.COLOR_BGR2RGB)
+					encodings = face_recognition.face_encodings(rgb,num_jitters=2,model="large")
+					for enc in encodings:
+						frameEmb=enc
+
+
+				#Compare the face embedding of te frame with all faces registered on the dataset
+				distances=np.empty(len(knownEmbeddings),)
+				distances = face_recognition.face_distance(knownEmbeddings,frameEmb)
+
+				faceDistances={}
+				matchCount={}
+				for (i,d) in enumerate(distances):
+					if d <= args["t"]:
+						matchCount[i] = matchCount.get(i,0)+1
+					
+					faceDistances[i] = faceDistances.get(i,max(distances))
+					if d < faceDistances[i]: 
+						faceDistances[i]=d
+							
+				ind = min(faceDistances,key=faceDistances.get) # Get the name with minimum distance
+				if len(matchCount) >0:
+					ind = max(matchCount,key=matchCount.get)
+				
+				name = knownNames[ind]				
+				faceComparedPath = facePaths[ind]
+				distance = faceDistances.get(ind)
+				probability = max(distances) - distance
+				
+				if probability >= args["p"] : 
+					text = "#{}-{} : {:.2f}%".format(f,name, probability*100)
+				else:
+					name="Unknown"
+				faceCompared = cv2.imread(faceComparedPath)
+				imutils.resize(faceCompared,width=600,height=600)
+				cv2.imshow("Face#{} Best match".format(f),faceCompared)
+				
+
+
+				if args["d"]:
+						print("\nFace#{}\nLooks like = {}\nPredicted = {}\nDistance = {}\nProbability = {:.2f}%\nMatch count = {}\n".format(f,knownNames[ind],name,distance,probability*100,matchCount.get(ind,-1)))
+
+				y = startY - 10 if startY - 10 > 10 else startY + 10	
+				cv2.rectangle(frame, (startX, startY), (endX, endY),(0, 0, 255), 2)
+				cv2.putText(frame, text, (startX, y),cv2.FONT_ITALIC,.45, (0, 00, 255), 2)
 			
 	text2="{} faces".format(noDetected)
 	cv2.putText(frame,text2,(20,30),cv2.FONT_ITALIC,.60,(0,0,255),2)	
-	cv2.imshow("Frame", frame)
-	noDetected=0
-	fps.update()
+	cv2.imshow("Frame", frame)	
 	
 	key = cv2.waitKey(1) & 0xFF 
 	

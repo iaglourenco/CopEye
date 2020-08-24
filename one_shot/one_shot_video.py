@@ -20,7 +20,8 @@ ap.add_argument("-v",help="Path to the video",required=True)
 ap.add_argument("-o",help="Path to the output video",required=True)
 ap.add_argument("-d",help="Show information about processing",required=False,action="store_true")
 ap.add_argument("-c",help="Minimum confidence to find face",required=False,type=float,default=0.8)
-ap.add_argument("-p",help="Minimum confidence to predict a person, matches in dataset",required=False,type=float,default=0.6)
+ap.add_argument("-p",help="Minimum confidence to predict a person, matches in dataset",required=False,type=float,default=0.55)
+ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.6)
 ap.add_argument("--dlib",help="Use dlib's model to extract embeddings",required=False,action="store_true")
 args = vars(ap.parse_args())
 
@@ -45,7 +46,7 @@ print("[INFO] - Loading known embeddings")
 data = pickle.loads(open("known/embeddings.pickle","rb").read()) 
 knownEmbeddings = []
 knownNames = []
-samples = {}
+facePaths = [] 
 noDetected=0
 frameEmb = np.empty((128,))
 proba = 0
@@ -56,7 +57,8 @@ for e in data["embeddings"]:
 for n in data["names"]:
 	knownNames.append(n)
 
-samples = data["samples"]
+for fp in data["facePaths"]:
+	facePaths.append(fp)
 
 
 print("[INFO] - Starting video read")
@@ -76,17 +78,16 @@ out = VideoWriter(args["o"]+".avi",cv2.VideoWriter_fourcc(*'XVID'),vc.get(cv2.CA
 fps = FPS().start()
 bar = ProgressBar(vc.get(cv2.CAP_PROP_FRAME_COUNT)+1).start()
 bar.widgets.append(ETA())
-count=1
+count=2
 pause = False
 print("[INFO] - Processing video - Press 'p' to pause and 'q' to quit")
 while vc.isOpened():
 
 	ret,frame = vc.read()
 	bar.update(count+1)
-	count+=1
-	if ret == True:
-		name="Unknown"
-		text = "{}".format(name)
+	# count+=1
+	if ret == True and count %2 ==0:
+		
 		frame = imutils.resize(frame, width=600)
 		#frame = imutils.rotate(frame,angle=90)
 		(h, w) = frame.shape[:2]
@@ -97,7 +98,8 @@ while vc.isOpened():
 		detections = detector.forward()
 		
 		for f in range(0, detections.shape[2]):
-		
+			name="Unknown"
+			text = "{}".format(name)
 			confidence = detections[0, 0, f, 2]
 			if confidence > args["c"]:
 				noDetected+=1
@@ -105,22 +107,17 @@ while vc.isOpened():
 				(startX, startY, endX, endY) = box.astype("int")
 
 				face = frame[startY:endY, startX:endX]
-				
+				(fH, fW) = face.shape[:2]# Get the face height and weight			
+				if fW > 250 or fH > 340 or fW < 20 or fH < 20:
+					continue
+
 				al = np.copy(frame)
 				gray=cv2.cvtColor(al,cv2.COLOR_BGR2GRAY)
 				
 				face = fa.align(al,
 				gray,
 				dlib.rectangle(startX,startY,endX,endY))		
-				
-				
-				# (fH, fW) = face.shape[:2]
-				# if fW > 250 or fH > 340:
-				# 	break
-			
-				# if fW < 20 or fH < 20:
-				# 	continue
-
+					
 				if noDetected > 0:
 					cv2.imshow("Face#{}".format(f),face)
 				
@@ -143,25 +140,36 @@ while vc.isOpened():
 				distances = face_recognition.face_distance(knownEmbeddings,frameEmb)
 				
 				faceDistances={}
+				matchCount={}
 				for (i,d) in enumerate(distances):
-					n = knownNames[i]
-					faceDistances[n] = faceDistances.get(n,max(distances))
-					if d < faceDistances[n]: 
-						faceDistances[n]=d
+					if d <= args["t"]:
+						matchCount[i] = matchCount.get(i,0)+1
+					
+					faceDistances[i] = faceDistances.get(i,max(distances))
+					if d < faceDistances[i]: 
+						faceDistances[i]=d
+							
+				ind = min(faceDistances,key=faceDistances.get) # Get the name with minimum distance
+				if len(matchCount) >0:
+					ind = max(matchCount,key=matchCount.get)
+				
+				name = knownNames[ind]				
+				faceComparedPath = facePaths[ind]
+				distance = faceDistances.get(ind)
+				probability = max(distances) - distance
 
-			
-				name = min(faceDistances,key=faceDistances.get) # Get the name of the face with the minimum distance
-				distance = faceDistances.get(name)
-				accuracy = max(distances) - distance
-				if distance <= args["p"]: 
-					text = "#{}-{} : {:.2f}%".format(f,name, accuracy*100)
+				if probability >= args["p"] : 
+					text = "#{}-{} : {:.2f}%".format(f,name, probability*100)
 				else:
 					name="Unknown"
-
-				print(faceDistances)
-				if args["d"]:
-						print("\nFace#{}\nLooks like = {}\nPredicted = {}\nDistance = {}\nAccuracy = {:.2f}%\n".format(f,min(faceDistances,key=faceDistances.get),name,distance,accuracy*100))
 				
+				faceCompared = cv2.imread(faceComparedPath)
+				imutils.resize(faceCompared,width=600,height=600)
+				cv2.imshow("Face#{} Best match".format(f),faceCompared)
+				
+				if args["d"]:
+						print("\nFace#{}\nLooks like = {}\nPredicted = {}\nDistance = {}\nProbability = {:.2f}%\nMatch count = {}\n".format(f,knownNames[ind],name,distance,probability*100,matchCount.get(ind,-1)))
+
 				y = startY - 10 if startY - 10 > 10 else startY + 10
 				cv2.rectangle(frameOut, (startX, startY), (endX, endY),(0, 0, 255), 1)
 				cv2.putText(frameOut, text, (startX, y),cv2.FONT_ITALIC,.45, (0, 0, 255), 1)

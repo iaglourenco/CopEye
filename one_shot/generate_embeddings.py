@@ -28,7 +28,7 @@ print("[INFO] - Loading faces")
 imagePaths = list(paths.list_images(args.get("data")))
 knownEmbeddings = []
 knownNames = []
-samples = {}
+facePaths = []
 
 if args["dlib"]:
     #Use dlib embeddings extractor
@@ -87,14 +87,13 @@ for (i,imagePath) in enumerate(imagePaths):
             #Every dict value has:
             # embeddings: The 128d vector with the face
             # name: Name or ID of this face
-            # samples: No. of sample of this ID/name 
+            # facePaths: Path to the photo 
             if opencv:
                 #Using openCV
                 faceBlob = cv2.dnn.blobFromImage(face,1.0/255,(96,96),(0,0,0),swapRB=True,crop=False)
                 emb.setInput(faceBlob)
                 vec = emb.forward()
                 knownNames.append(name)
-                samples[name] = samples.get(name,0)+1
                 knownEmbeddings.append(vec.flatten())
             else:    
                 #Using dlib
@@ -104,16 +103,16 @@ for (i,imagePath) in enumerate(imagePaths):
                 for enc in encodings:
                     knownEmbeddings.append(enc)
                     knownNames.append(name)
-                    samples[name] = samples.get(name,0)+1
-
+            
+            
+            facePaths.append(imagePath)
             bar.update(total+1)
             total+=1
 bar.finish()
 
 #Save embeddings dictionary  to the disk
-print(len(knownEmbeddings))
 print("[INFO] - Serializing {} encodings...".format(total))
-data = {"embeddings": knownEmbeddings, "names": knownNames, "samples": samples}
+data = {"embeddings": knownEmbeddings, "names": knownNames, "facePaths": facePaths}
 f = open("known/embeddings.pickle","wb")
 f.write(pickle.dumps(data))
 f.close()
