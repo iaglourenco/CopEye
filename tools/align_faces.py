@@ -43,6 +43,5 @@ for i,imagePath in enumerate(imagePaths):
 
     rects = detector(gray,2)
     for rect in rects:
-        (x,y,w,h) = rect_to_bb(rect)
         image = fa.align(image,gray,rect)
         cv2.imwrite(imagePath,image) 
