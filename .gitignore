@@ -1,10 +1,7 @@
 .vscode/
-.gitignore
-one_shot/kaggle_dataset/*
-one_shot/dataset/*
-SVM/dataset/*
-one_shot/kaggle_dataset_full/*
-SVM/models/*
-one_shot/models/*
-SVM/avengers.mp4
-one_shot/b99.mp4
+one_shot/datasets
+one_shot/input
+SVM/dataset
+SVM/models
+one_shot/models
+one_shot/output
