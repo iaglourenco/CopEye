@@ -6,13 +6,13 @@
 ![alt](https://github.com/iaglourenco/CopEye/blob/develop/examples/compare1.png?raw=true)
 ![alt](https://github.com/iaglourenco/CopEye/blob/develop/examples/compare2.png?raw=true)
 
-# How it works
+## How it works
 
 Using the One-shot technique, it recognizes the person with just one photo.
 
 ```Using more photos it will only improve the result, but try to vary the poses```
 
-# How to execute
+## How to execute
 
 Be sure to have python,dlib and opencv installed (there's more modules needed)
 
@@ -25,12 +25,12 @@ If you want to run in a new dataset, do this:
 3. Run `generate_embeddings.py` to generate the embeddings (*obviously*)
 4. Now is the time to play! :smile:, run `one_shot.py` for real-time recognition using your webcam or `one_shot_video.py` for recognize persons in a video file (*only supports mp4 videos*)
 
-# Need help?
+## Need help?
 All scripts have a `-h` option that will explain what you need to pass in arguments.
 
 And you can contact me btw!
 
-# Beautiful and amazing projects used
+## Beautiful and wonderful projects and software that were used here  
 
 [dlib](http://dlib.net/)
 
