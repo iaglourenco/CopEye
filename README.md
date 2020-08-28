@@ -16,7 +16,7 @@ Using the One-shot technique, it recognizes the person with just one photo.
 
 Be sure to have python,dlib and opencv installed (there's more modules needed)
 
-There's a precompiled dataset on the repo, it have more than 100 celebrities registered, you can run the script directly with `one_shot.py` and see the algorithm find the celebrity most like you or try it in a movie trailer with `one_shot_video.py` (*run `<script-name> -h` for how-to-use*)
+There's a precompiled dataset on the repo, it have more than 100 celebrities registered, you can run the script directly with `one_shot.py` and see the algorithm find the celebrity most like you or try it in a movie trailer(check [input](https://github.com/iaglourenco/CopEye/tree/master/input) folder for a surprise :wink:) with `one_shot_video.py` (*run `<script-name> -h` for how-to-use*)
 
 If you want to run in a new dataset, do this:
 

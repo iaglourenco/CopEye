@@ -13,7 +13,8 @@ import face_recognition
 import dlib
 import argparse
 from progressbar import ProgressBar,ETA
-import keyboard
+import math
+
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-v",help="Path to the video",required=True)
@@ -24,6 +25,17 @@ ap.add_argument("-p",help="Minimum confidence to predict a person, matches in da
 ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.6)
 ap.add_argument("--opencv",help="Use opencv model to extract embeddings",required=False,action="store_true")
 args = vars(ap.parse_args())
+
+def distance2conf(face_distance,tolerance):
+	if face_distance > tolerance:
+		range = (1.0 - tolerance)
+		linear_val = (1.0 - face_distance) / (range * 2.0)
+		return linear_val
+	else:
+		range = tolerance
+		linear_val = 1.0 - (face_distance / (range * 2.0))
+		return linear_val + ((1.0 - linear_val) * math.pow((linear_val - 0.5) *2,0.2))
+
 
 
 if args["opencv"]:	
@@ -80,15 +92,15 @@ out = VideoWriter(args["o"]+".avi",cv2.VideoWriter_fourcc(*'XVID'),vc.get(cv2.CA
 fps = FPS().start()
 bar = ProgressBar(vc.get(cv2.CAP_PROP_FRAME_COUNT)+1).start()
 bar.widgets.append(ETA())
-count=2
+count=1
 pause = False
 print("[INFO] - Processing video - Press 'p' to pause and 'q' to quit")
 while vc.isOpened():
 
 	ret,frame = vc.read()
-	bar.update(count+1)
-	# count+=1
-	if ret == True and count %2 ==0:
+	bar.update(count)
+	count+=1
+	if ret == True and count % 2 == 0:
 		
 		frame = imutils.resize(frame, width=600)
 		#frame = imutils.rotate(frame,angle=90)
@@ -132,6 +144,7 @@ while vc.isOpened():
 				else:
 					rgb = cv2.cvtColor(face,cv2.COLOR_BGR2RGB)
 					encodings=[]
+					locations = face_recognition.face_locations(rgb,model="cnn")
 					encodings = face_recognition.face_encodings(rgb,num_jitters=2,model="large")
 					for enc in encodings:
 						frameEmb=enc
@@ -160,7 +173,7 @@ while vc.isOpened():
 							
 				ind = min(faceDistances,key=faceDistances.get) # Get the name with minimum distance
 				distance = faceDistances.get(ind)
-				probability = max(distances) - distance
+				probability = distance2conf(distance,args["t"])
 
 				if len(matchCount) > 0:
 					matchName = max(matchCount,key=matchCount.get)
@@ -170,7 +183,8 @@ while vc.isOpened():
 					if matchDis <= distance and nOfMatches > 1:
 						ind = matchInd
 						name = knownNames[ind]
-						probability = max(distances) - distance/nOfMatches
+						probability = distance2conf(distance,args["t"])
+						
 						
 						 
 				name = knownNames[ind]				
@@ -223,16 +237,6 @@ while vc.isOpened():
 			time.sleep(2)
 			exit()
 		
-	else:
-		fps.stop()
-		print("[INFO] - elapsed time: {:.2f}".format(fps.elapsed()))
-		print("[INFO] - approx. FPS: {:.2f}".format(fps.fps()))	
-		vc.release()
-		out.release()
-		bar.finish()
-		cv2.destroyAllWindows()
-		time.sleep(2)
-		exit()
 
 
 
