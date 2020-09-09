@@ -99,7 +99,7 @@ for (i,imagePath) in enumerate(imagePaths):
                 #Using dlib
                 rgb=cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
                 locations = face_recognition.face_locations(rgb,model="cnn")
-                encodings = face_recognition.face_encodings(rgb,locations,num_jitters=2,model="large")
+                encodings = face_recognition.face_encodings(rgb,locations,num_jitters=10,model="large")
                 for enc in encodings:
                     knownEmbeddings.append(enc)
                     knownNames.append(name)
