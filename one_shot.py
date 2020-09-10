@@ -175,6 +175,8 @@ try:
 						if nOfMatches > 2:
 							ind = matchInd
 							name = knownNames[ind]
+					else:
+						distance += distance/2
 							
 					probability = distance2conf(distance,args["t"])
 					name = knownNames[ind]				

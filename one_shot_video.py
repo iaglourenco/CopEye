@@ -191,7 +191,8 @@ try:
 							ind = matchInd
 							name = knownNames[ind]
 							probability = distance2conf(distance,args["t"])
-							
+					else:
+						distance+=distance/2
 							
 							
 					name = knownNames[ind]				
