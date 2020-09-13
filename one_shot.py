@@ -12,28 +12,18 @@ import face_recognition
 import dlib
 import argparse
 import math
-
+import socket
+from functions import *
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-d",help="show information about processing",required=False,action="store_true")
 ap.add_argument("-c",help="minimum confidence to find face on the frame",required=False,type=float,default=0.8)
-ap.add_argument("-p",help="minimum confidence to predict a person, matches in dataset",required=False,type=float,default=0.55)
+ap.add_argument("-p",help="minimum confidence to predict a person, matches in dataset",required=False,type=float,default=0.85)
 ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.7)
 ap.add_argument("--opencv",help="use opencv model to extract embeddings",required=False,action="store_true")
 ap.add_argument("--interface",help="show interface while running",required=False,action="store_true",default=False)
 
 args = vars(ap.parse_args())
-
-
-def distance2conf(face_distance,tolerance):
-	if face_distance > tolerance:
-		range = (1.0 - tolerance)
-		linear_val = (1.0 - face_distance) / (range * 2.0)
-		return linear_val
-	else:
-		range = tolerance
-		linear_val = 1.0 - (face_distance / (range * 2.0))
-		return linear_val + ((1.0 - linear_val) * math.pow((linear_val - 0.5) *2,0.2))
 
 
 if args["opencv"]:	
@@ -77,6 +67,7 @@ for fp in data["facePaths"]:
 
 
 
+
 if args['interface']:
 	print("[INFO] - Starting video stream - Press 'p' to pause and 'q' to quit")
 else:
@@ -91,7 +82,6 @@ count=1
 fps = FPS().start()
 try:
 	while True:
-		
 		
 		noDetected=0
 		count+=1
@@ -119,10 +109,11 @@ try:
 					noDetected+=1 #Faces detected in the frame counter
 					box = detections[0, 0, f, 3:7] * np.array([w, h, w, h])# Convert the positions to a np.array
 					(startX, startY, endX, endY) = box.astype("int")# Get the coordinates to cut the face from the frame
-					boxFace = frame[startY:endY, startX:endX] #Extract the face from the frame
-					(fH, fW) = boxFace.shape[:2]# Get the face height and weight			
-					if fW > 250 or fH > 340 or fW < 20 or fH < 20:
-						continue
+					
+					# boxFace = frame[startY:endY, startX:endX] #Extract the face from the frame
+					# (fH, fW) = boxFace.shape[:2]# Get the face height and weight			
+					# if fW > 250 or fH > 340 or fW < 20 or fH < 20:
+					# 	continue
 					
 					
 					#Face alignment
@@ -210,6 +201,22 @@ try:
 					# faceComparedPath - caminho da foto comparada, deve ser substituida por um ID
 					# probability - probabilidade calculada
 					# name - nome do suspeito
+					path = "frame%s.jpg" % name
+					if not os.path.exists(path):
+						cv2.imwrite("frame%s.jpg" % name, frameOut)
+					s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+					s.connect(("192.168.1.101", 9700))
+					filesize = os.path.getsize(path)
+					with open(path, "rb") as f:
+					    while(True):
+					        # read the bytes from the file
+					        bytes_read = f.read(1024)
+					        if not bytes_read:
+					            break
+					        s.sendall(bytes_read)
+					s.close()
+					
+					
 					
 							
 
@@ -238,3 +245,6 @@ except KeyboardInterrupt:
 	cv2.destroyAllWindows()
 	time.sleep(2)
 	exit()
+except Exception as e:
+	print("[ERROR] - Error during execution")
+	ex_info()
