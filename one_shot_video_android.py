@@ -20,7 +20,7 @@ import argparse
 import math
 from functions import *
 
-BUFFER_SIZE = 4096 # send 4096 bytes each time step
+BUFFER_SIZE = 1024 # send 4096 bytes each time step
 host = "192.168.1.101"
 port = 9700
 timeoutEachPerson = 0
@@ -33,31 +33,52 @@ frequency=[]
 def sendFrame(p,name2send):
 
 	toSend = p.get(name2send)
+	
 	now = datetime.now()
 
-	string = now.strftime("%d/%m/%Y %H:%M:%S")
-	path = "./log/{}-{}-{}.jpg".format(count, name2send, now)
+	tempo = now.strftime("%d-%m-%Y %H:%M:%S")
+	path1 = "./log/{}-{}-{}.jpg".format(count, name2send, tempo)
+	path2 = "./log/{}-{}-{}_face_crop.jpg".format(count, name2send, tempo)
+	msg = " " + name2send + "\n" + " "+ tempo + "\n" +" "+str(round(toSend[0]*100,2))+"%" + "\n"+ "\0"
+	msg = msg.ljust(1024,"0")
 	try:
-		cv2.imwrite(path, toSend[1])
+		cv2.imwrite(path1, toSend[1])
+		cv2.imwrite(path2,toSend[2])
 	except Exception as e:
 		print("[ERROR] - Failed to save log")
 		ex_info()
+		
+	enviaBytes(msg, "1")
+	enviaBytes(path1, "2")
+	enviaBytes(path2, "2")
+	enviaBytes(faceComparedPath,"2")
+	
+		
 
-	try:
-		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		filesize = os.path.getsize(path)
-		s.connect((host, port))
-		with open(path, "rb") as f:
-			while(True):
-				# read the bytes from the file
-				bytes_read = f.read(BUFFER_SIZE)
-				if not bytes_read:
-					break
-				s.sendall(bytes_read)
+
+def enviaBytes(sendBytes, opt):
+
+
+		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)		
+		s.connect((host, port))	
+
+		if opt == "1":
+			s.send(sendBytes.encode())
+
+		else:
+			filesize = os.path.getsize(sendBytes)
+			with open(sendBytes, "rb") as f:
+				while(True):
+					# read the bytes from the file
+					bytes_read = f.read(BUFFER_SIZE)
+					if not bytes_read:
+						break
+					s.sendall(bytes_read)
+					
 		s.close()		
-	except Exception as e:
-		print("[ERROR] - Socket connection")
-		ex_info()
+	
+
+
 
 def checkDetectionFrequency(p):	
 	global timeoutEachPerson
@@ -184,8 +205,8 @@ try:
 					gray,
 					dlib.rectangle(startX,startY,endX,endY))		
 						
-					if noDetected > 0 and args['interface']:
-						cv2.imshow("Face#{}".format(f),face)
+					#if noDetected > 0 and args['interface']:
+					#	cv2.imshow("Face#{}".format(f),face)
 					
 					frameEmb=np.empty(128,)
 					if opencv:
@@ -245,7 +266,7 @@ try:
 					
 					if probability >= args["p"] : 
 						text = "#{}-{} : {:.2f}%".format(f,name, probability*100)
-						frequency.append((probability,name,frameOut))
+						frequency.append((probability,name,frameOut,face))
 					else:
 						name="Unknown"
 
@@ -253,13 +274,14 @@ try:
 						# shot[0]=probability
 						# shot[1]=name
 						# shot[2]=frameOut
+						# shot[3]=faceCrop
 						timeout2Send=time.time()
 						for shot in frequency :
 							p = detectedPersons.get(shot[1])
 							if p == None:
-								detectedPersons[shot[1]]=(shot[0],shot[2])
+								detectedPersons[shot[1]]=(shot[0],shot[2],shot[3])
 							elif p[0] < shot[0]:
-								detectedPersons[shot[1]]=(shot[0],shot[2])
+								detectedPersons[shot[1]]=(shot[0],shot[2],shot[3])
 						checkDetectionFrequency(detectedPersons)
 						frequency.clear()
 						detectedPersons.clear()
@@ -267,9 +289,9 @@ try:
 
 					if args['interface']:
 						faceCompared = cv2.imread(faceComparedPath)
-						if not faceCompared is None:
-							imutils.resize(faceCompared,width=600,height=600)
-							cv2.imshow("Face#{} Best match".format(f),faceCompared)
+						#if not faceCompared is None:
+						#	imutils.resize(faceCompared,width=600,height=600)
+						#	cv2.imshow("Face#{} Best match".format(f),faceCompared)
 					
 
 
@@ -307,9 +329,8 @@ except KeyboardInterrupt:
 	cv2.destroyAllWindows()
 	time.sleep(2)
 	exit()
-except Exception as e:
-	print("[ERROR] - Error during execution")
-	ex_info()
-
+# except Exception as e:
+# 	print("[ERROR] - Error during execution")
+# 	ex_info()
 
 

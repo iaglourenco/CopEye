@@ -201,22 +201,7 @@ try:
 					# faceComparedPath - caminho da foto comparada, deve ser substituida por um ID
 					# probability - probabilidade calculada
 					# name - nome do suspeito
-					path = "frame%s.jpg" % name
-					if not os.path.exists(path):
-						cv2.imwrite("frame%s.jpg" % name, frameOut)
-					s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-					s.connect(("192.168.1.101", 9700))
-					filesize = os.path.getsize(path)
-					with open(path, "rb") as f:
-					    while(True):
-					        # read the bytes from the file
-					        bytes_read = f.read(1024)
-					        if not bytes_read:
-					            break
-					        s.sendall(bytes_read)
-					s.close()
-					
-					
+				
 					
 							
 
