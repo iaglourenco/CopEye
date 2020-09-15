@@ -1,7 +1,3 @@
-import socket
-import os
-import time
-from datetime import datetime
 from imutils.video import VideoStream
 from imutils.video import FPS
 from imutils.face_utils import FaceAligner
@@ -13,63 +9,11 @@ import pickle
 import time
 import cv2
 import os
-import sys
 import face_recognition
 import dlib
 import argparse
 import math
 from functions import *
-
-BUFFER_SIZE = 4096 # send 4096 bytes each time step
-host = "192.168.1.101"
-port = 9700
-timeoutEachPerson = 0
-frames = []
-history={}
-N_OCURRENCE=10
-frequency=[]
-
-
-def sendFrame(p,name2send):
-
-	toSend = p.get(name2send)
-	now = datetime.now()
-
-	string = now.strftime("%d/%m/%Y %H:%M:%S")
-	path = "./log/{}-{}-{}.jpg".format(count, name2send, now)
-	try:
-		cv2.imwrite(path, toSend[1])
-	except Exception as e:
-		print("[ERROR] - Failed to save log")
-		ex_info()
-
-	try:
-		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		filesize = os.path.getsize(path)
-		s.connect((host, port))
-		with open(path, "rb") as f:
-			while(True):
-				# read the bytes from the file
-				bytes_read = f.read(BUFFER_SIZE)
-				if not bytes_read:
-					break
-				s.sendall(bytes_read)
-		s.close()		
-	except Exception as e:
-		print("[ERROR] - Socket connection")
-		ex_info()
-
-def checkDetectionFrequency(p):	
-	global timeoutEachPerson
-	for n in p:
-		history[n] = history.get(n,0)+1
-
-		ocurrence = history.get(n,0)
-		global timeoutEachPerson
-		if ocurrence <= N_OCURRENCE and time.time() - timeoutEachPerson > 5:
-			sendFrame(p,n)
-			timeoutEachPerson = time.time()
-			frames.clear()
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-v",help="Path to the video",required=True)
@@ -78,8 +22,11 @@ ap.add_argument("-d",help="Show information about processing",required=False,act
 ap.add_argument("-c",help="Minimum confidence to find face",required=False,type=float,default=0.8)
 ap.add_argument("-p",help="Minimum confidence to predict a person, matches in dataset",required=False,type=float,default=0.85)
 ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.6)
-ap.add_argument("--interface",help="show interface while running",required=False,action="store_true",default=False)
+ap.add_argument("--interface",help="show minimal interface while running",required=False,action="store_true",default=False)
+ap.add_argument("--interface2",help="show full interface while running",required=False,action="store_true",default=False)
 ap.add_argument("--opencv",help="Use opencv model to extract embeddings",required=False,action="store_true")
+ap.add_argument("--android",help="send data to the android app",required=False,action="store_true",default=True)
+
 args = vars(ap.parse_args())
 
 
@@ -107,10 +54,15 @@ knownEmbeddings = []
 knownNames = []
 facePaths = [] 
 noDetected=0
+
 frameEmb = np.empty((128,))
 proba = 0
 timeout2Send=0
-detectedPersons ={}
+
+timeouts={}
+history={}
+detectedInFrame={}
+
 
 for e in data["embeddings"]:
 	knownEmbeddings.append(e)
@@ -137,7 +89,7 @@ frame = imutils.resize(frame, width=600)
 out = VideoWriter(args["o"]+".avi",cv2.VideoWriter_fourcc(*'XVID'),vc.get(cv2.CAP_PROP_FPS)/2,(frame.shape[1],frame.shape[0]))
 
 fps = FPS().start()
-count=1
+frameNo=1
 pause = False
 
 if args['interface']:
@@ -149,9 +101,9 @@ try:
 	while vc.isOpened():
 
 		ret,frame = vc.read()
-		count+=1
-		print("{}/{}".format(count,vc.get(cv2.CAP_PROP_FRAME_COUNT)),end='\r')
-		if ret == True and count % 2 == 0:
+		frameNo+=1
+		print("{}/{}".format(frameNo,vc.get(cv2.CAP_PROP_FRAME_COUNT)),end='\r')
+		if ret == True and frameNo % 2 == 0:
 			
 			frame = imutils.resize(frame, width=600)
 			#frame = imutils.rotate(frame,angle=90)
@@ -184,7 +136,7 @@ try:
 					gray,
 					dlib.rectangle(startX,startY,endX,endY))		
 						
-					if noDetected > 0 and args['interface']:
+					if noDetected > 0 and args['interface2']:
 						cv2.imshow("Face#{}".format(f),face)
 					
 					frameEmb=np.empty(128,)
@@ -245,44 +197,36 @@ try:
 					
 					if probability >= args["p"] : 
 						text = "#{}-{} : {:.2f}%".format(f,name, probability*100)
-						frequency.append((probability,name,frameOut))
+						detectedInFrame = createDetectedStruct(detectedInFrame,(probability,name,frameOut,face,faceComparedPath,frameNo))
 					else:
 						name="Unknown"
 
-					if len(frequency) > 0 and time.time() - timeout2Send > 2 and noDetected>0:
-						# shot[0]=probability
-						# shot[1]=name
-						# shot[2]=frameOut
-						timeout2Send=time.time()
-						for shot in frequency :
-							p = detectedPersons.get(shot[1])
-							if p == None:
-								detectedPersons[shot[1]]=(shot[0],shot[2])
-							elif p[0] < shot[0]:
-								detectedPersons[shot[1]]=(shot[0],shot[2])
-						checkDetectionFrequency(detectedPersons)
-						frequency.clear()
-						detectedPersons.clear()
+					y = startY - 10 if startY - 10 > 10 else startY + 10
+					cv2.rectangle(frameOut, (startX, startY), (endX, endY),(0, 0, 255), 2)
+					cv2.putText(frameOut, text, (startX, y),cv2.FONT_ITALIC,.45, (0, 255, 255), 2)
 
-
-					if args['interface']:
+					if len(detectedInFrame) > 0 and time.clock() - timeout2Send > 2:
+						print('Checking...')
+						timeout2Send=time.clock()
+						history,timeouts = updateFrequency(detectedInFrame,history,timeouts)
+						detectedInFrame.clear()
+						
+						
+					if args['interface2']:
 						faceCompared = cv2.imread(faceComparedPath)
 						if not faceCompared is None:
 							imutils.resize(faceCompared,width=600,height=600)
 							cv2.imshow("Face#{} Best match".format(f),faceCompared)
 					
 
-
 					if args["d"]:
 							print("\nFace#{}\nLooks like = {}\nPredicted = {}\nDistance = {}\nProbability = {:.2f}%\nMatch count = {}\n".format(f,knownNames[ind],name,distance,probability*100,matchCount.get(name,-1)))
 
-					y = startY - 10 if startY - 10 > 10 else startY + 10
-					cv2.rectangle(frameOut, (startX, startY), (endX, endY),(0, 0, 255), 2)
-					cv2.putText(frameOut, text, (startX, y),cv2.FONT_ITALIC,.45, (0, 255, 255), 2)
+					
 				
 			noDetected=0
 			out.write(frameOut)
-			if args['interface']:
+			if args['interface2'] or args['interface']:
 				cv2.imshow("Output Preview",frameOut)		
 			fps.update()
 
@@ -305,11 +249,10 @@ except KeyboardInterrupt:
 	vc.release()
 	out.release()
 	cv2.destroyAllWindows()
+
 	time.sleep(2)
 	exit()
 except Exception as e:
 	print("[ERROR] - Error during execution")
 	ex_info()
-
-
 

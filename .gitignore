@@ -5,7 +5,7 @@ Discontinued/
 
 datasets/kaggle_dataset_full/
 
-datasets/kaggle_dataset/
+log/*
 
 models/nn4.v1.t7
 

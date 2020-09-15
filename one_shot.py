@@ -12,7 +12,6 @@ import face_recognition
 import dlib
 import argparse
 import math
-import socket
 from functions import *
 
 ap = argparse.ArgumentParser()
@@ -21,28 +20,27 @@ ap.add_argument("-c",help="minimum confidence to find face on the frame",require
 ap.add_argument("-p",help="minimum confidence to predict a person, matches in dataset",required=False,type=float,default=0.85)
 ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.7)
 ap.add_argument("--opencv",help="use opencv model to extract embeddings",required=False,action="store_true")
-ap.add_argument("--interface",help="show interface while running",required=False,action="store_true",default=False)
+ap.add_argument("--interface",help="show minimal interface while running",required=False,action="store_true",default=False)
+ap.add_argument("--interface2",help="show full interface while running",required=False,action="store_true",default=False)
+ap.add_argument("--android",help="send data to the android app",required=False,action="store_true",default=False)
 
 args = vars(ap.parse_args())
 
 
 if args["opencv"]:	
-#Use openCV model to extract embeddings
+	#Use openCV model
     opencv=True
-    print("[INFO] - Using OpenCV embedding model")
+    print("[INFO] - Loading OpenCV embedding model")
     emb = cv2.dnn.readNetFromTorch("models/nn4.small1.v1.t7")
-
 else:
-	#Use dlib embeddings extractor
+	#Use dlib model
     print("[INFO] - Using DLIB embedding model")
     opencv = False
-
 
 #Face detector, return the position of the faces in the image
 print("[INFO] - Loading face detector")
 detector = cv2.dnn.readNetFromCaffe("models/face_detection_model/deploy.prototxt",
 			"models/face_detection_model/res10_300x300_ssd_iter_140000.caffemodel")
-
 
 sp = dlib.shape_predictor("models/shape_predictor_68_face_landmarks.dat")
 fa = FaceAligner(sp)
@@ -53,6 +51,15 @@ data = pickle.loads(open("known/embeddings.pickle","rb").read())
 knownEmbeddings = []
 knownNames = []
 facePaths = []
+noDetected=0
+
+frameEmb = np.empty((128,))
+proba = 0
+timeout2Send=0
+
+timeouts={}
+history={}
+detectedInFrame={}
 
 #Loading to variables
 for e in data["embeddings"]:
@@ -68,25 +75,31 @@ for fp in data["facePaths"]:
 
 
 
-if args['interface']:
+fps = FPS().start()
+frameNo=1
+pause = False
+
+if args['interface'] or args["interface2"]:
 	print("[INFO] - Starting video stream - Press 'p' to pause and 'q' to quit")
 else:
 	print("[INFO] - NO INTERFACE MODE - Press 'Ctrl+C' to quit")
+
+if args["android"]:
+	print("[INFO] - ANDROID MODE - Sending data to {}:{}\n".format(IP,DEFAULT_PORT))
 
 vs = VideoStream(src=0,resolution=(1280,720)).start()
 time.sleep(2.0)
 
 
 #Initializing variables
-count=1
-fps = FPS().start()
+
 try:
 	while True:
-		
-		noDetected=0
-		count+=1
 
 		frame = vs.read() # Read a frame
+
+		frameNo+=1
+
 		frame = imutils.resize(frame, width=600) #Rezising to extract the Blob after
 		(h, w) = frame.shape[:2] # Get the height and weight of the resized image
 		frameOut =  np.copy(frame)
@@ -94,7 +107,7 @@ try:
 		
 		fps.update()
 
-		if count %2 == 0:
+		if frameNo %2 == 0:
 			#Extract the blob of image to put in detector
 			imageBlob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 1.0, (300, 300),(104.0, 177.0, 123.0), swapRB=False, crop=False)
 			detector.setInput(imageBlob) # Realize detection
@@ -123,7 +136,7 @@ try:
 					gray,
 					dlib.rectangle(startX,startY,endX,endY))
 
-					if noDetected > 0 and args['interface']:
+					if noDetected > 0 and args['interface2']:
 						cv2.imshow("Face#{}".format(f),face)
 
 					frameEmb = np.empty(128,)
@@ -175,12 +188,26 @@ try:
 
 					if probability >= args["p"] : 
 						text = "#{}-{} : {:.2f}%".format(f,name, probability*100)
+						if args['android']:
+							detectedInFrame = createDetectedStruct(detectedInFrame,(probability,name,frameOut,face,faceComparedPath,frameNo))
+
 					else:
 						name="Unknown"
 						text = "{}".format(name)
 
-					
-					if args['interface']:
+					y = startY - 10 if startY - 10 > 10 else startY + 10	
+					cv2.rectangle(frameOut, (startX, startY), (endX, endY),(0, 0, 255), 2)
+					cv2.putText(frameOut, text, (startX, y),cv2.FONT_ITALIC,.45, (0, 255, 255), 2)
+			
+
+
+					if len(detectedInFrame) > 0 and time.clock() - timeout2Send > 2 and args["android"]:
+						print('Checking...')
+						timeout2Send=time.clock()
+						history,timeouts = updateFrequency(detectedInFrame,history,timeouts)
+						detectedInFrame.clear()
+
+					if args['interface2']:
 						faceCompared = cv2.imread(faceComparedPath)
 						
 						if not faceCompared is None:
@@ -190,10 +217,7 @@ try:
 					if args["d"]:
 							print("\nFace#{}\nLooks like = {}\nPredicted = {}\nDistance = {}\nProbability = {:.2f}%\nMatch count = {}\n".format(f,knownNames[ind],name,distance,probability*100,matchCount.get(name,-1)))
 					
-					y = startY - 10 if startY - 10 > 10 else startY + 10	
-					cv2.rectangle(frameOut, (startX, startY), (endX, endY),(0, 0, 255), 2)
-					cv2.putText(frameOut, text, (startX, y),cv2.FONT_ITALIC,.45, (0, 255, 255), 2)
-			
+					
 					## Parametros importantes
 					# startY,startX,endY, endX - Box da face detectada no frame 
 					# frameOut - frame pintado
@@ -201,26 +225,11 @@ try:
 					# faceComparedPath - caminho da foto comparada, deve ser substituida por um ID
 					# probability - probabilidade calculada
 					# name - nome do suspeito
-					path = "frame%s.jpg" % name
-					if not os.path.exists(path):
-						cv2.imwrite("frame%s.jpg" % name, frameOut)
-					s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-					s.connect(("192.168.1.101", 9700))
-					filesize = os.path.getsize(path)
-					with open(path, "rb") as f:
-					    while(True):
-					        # read the bytes from the file
-					        bytes_read = f.read(1024)
-					        if not bytes_read:
-					            break
-					        s.sendall(bytes_read)
-					s.close()
-					
-					
+				
 					
 							
 
-			if args['interface']:
+			if args['interface'] or args['interface2']:
 				cv2.imshow("Output", frameOut)
 				
 
