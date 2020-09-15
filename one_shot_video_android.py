@@ -21,12 +21,12 @@ import math
 from functions import *
 
 BUFFER_SIZE = 1024 # send 4096 bytes each time step
-host = "192.168.1.101"
+host = "192.168.1.66"
 port = 9700
 timeoutEachPerson = 0
 frames = []
 history={}
-N_OCURRENCE=10
+N_OCURRENCE=5
 frequency=[]
 
 
@@ -51,7 +51,7 @@ def sendFrame(p,name2send):
 	enviaBytes(msg, "1")
 	enviaBytes(path1, "2")
 	enviaBytes(path2, "2")
-	enviaBytes(faceComparedPath,"2")
+	enviaBytes(toSend[3],"2")
 	
 		
 
@@ -266,7 +266,7 @@ try:
 					
 					if probability >= args["p"] : 
 						text = "#{}-{} : {:.2f}%".format(f,name, probability*100)
-						frequency.append((probability,name,frameOut,face))
+						frequency.append((probability,name,frameOut,face,faceComparedPath))
 					else:
 						name="Unknown"
 
@@ -275,23 +275,24 @@ try:
 						# shot[1]=name
 						# shot[2]=frameOut
 						# shot[3]=faceCrop
+						# shot[4]=faceComparedPath
 						timeout2Send=time.time()
 						for shot in frequency :
 							p = detectedPersons.get(shot[1])
 							if p == None:
-								detectedPersons[shot[1]]=(shot[0],shot[2],shot[3])
+								detectedPersons[shot[1]]=(shot[0],shot[2],shot[3],shot[4])
 							elif p[0] < shot[0]:
-								detectedPersons[shot[1]]=(shot[0],shot[2],shot[3])
+								detectedPersons[shot[1]]=(shot[0],shot[2],shot[3],shot[4])
 						checkDetectionFrequency(detectedPersons)
 						frequency.clear()
 						detectedPersons.clear()
 
 
-					if args['interface']:
-						faceCompared = cv2.imread(faceComparedPath)
-						#if not faceCompared is None:
-						#	imutils.resize(faceCompared,width=600,height=600)
-						#	cv2.imshow("Face#{} Best match".format(f),faceCompared)
+					# if args['interface']:
+					# 	faceCompared = cv2.imread(faceComparedPath)
+					# 	if not faceCompared is None:
+					# 		imutils.resize(faceCompared,width=600,height=600)
+					# 		cv2.imshow("Face#{} Best match".format(f),faceCompared)
 					
 
 
@@ -329,8 +330,8 @@ except KeyboardInterrupt:
 	cv2.destroyAllWindows()
 	time.sleep(2)
 	exit()
-# except Exception as e:
-# 	print("[ERROR] - Error during execution")
-# 	ex_info()
+except Exception as e:
+	print("[ERROR] - Error during execution")
+	ex_info()
 
 
