@@ -5,10 +5,12 @@ import socket
 import time
 import os
 import cv2
+import traceback
 
 MINIMAL_OCURRENCE = 5
 TIMEOUT_2_SEND = 5
 
+DEBUG = False
 
 IMAGE_TYPE_FRAME=1
 IMAGE_TYPE_CROP=2
@@ -20,19 +22,34 @@ BUFFER_SIZE=1024
 IP = "192.168.1.101"
 DEFAULT_PORT=9700
 
+LOGNAME_ERR="logerr"
+LOGNAME_INFO = "loginfo"
+DETECTION_LOGNAME = "detectionLog"
 
+os.system("echo '' > {}".format(LOGNAME_ERR))
+if DEBUG:
+	os.system("echo '' > {}".format(LOGNAME_INFO))
 
 
 def ex_info():
     #Get info about the exception
-	ex_type,ex_obj,ex_trace = sys.exc_info()
-	line_no=ex_trace.tb_lineno
+	exception = traceback.format_exc()
+	print(exception)
+	write2Log(exception,LOGNAME_ERR)
+	
 
-	print("\t Exception: ",ex_type)
-	print("\t Line no.: ",line_no)
-	print("\t Cause: ",ex_obj.args[0])
+def write2Log(text,logtype,print_terminal=False,supressDateHeader=False,append=True):
+	header="\r"
+	if supressDateHeader == False:
+		header = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
 
+	if append:
+		os.system("echo '{}\n{}' >> {}".format(header,text,logtype))
+	else:
+		os.system("echo '{}\n{}' > {}".format(header,text,logtype))
 
+	if(print_terminal):
+		print(text)
 
 
 def distance2conf(face_distance,tolerance):
@@ -98,7 +115,6 @@ def sendFrame(detected,name,typeOfSend):
 
 def sendBytes(data, dataType):
 
-
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)		
 		s.connect((IP, DEFAULT_PORT))	
 
@@ -147,9 +163,10 @@ def updateFrequency(detected,history,timeouts):
 	for n in detected:
 		history[n] = history.get(n,0)+1
 		timeouts[n]=timeouts.get(n,time.clock())
-		
-		# print("OCURRENCE OF {}={}\nACTUAL TIMEOUT= {}\n".format(n,history[n],timeouts[n]))
 
+
+		if DEBUG:
+			write2Log("OCURRENCE OF {}={}\nACTUAL TIMEOUT= {}\n".format(n,history[n],timeouts[n]),LOGNAME_INFO)
 
 
 		if history[n] == MINIMAL_OCURRENCE and time.clock() - timeouts[n] > TIMEOUT_2_SEND:
@@ -158,12 +175,24 @@ def updateFrequency(detected,history,timeouts):
 			
 		elif history[n] == 1:
 			timeouts[n]=time.clock()
-			print("Trying to send to {}:{}\n".format(IP,DEFAULT_PORT))
-			sendFrame(detected,n,INFO_TYPE)
-			sendFrame(detected,n,IMAGE_TYPE_FRAME)
-			sendFrame(detected,n,IMAGE_TYPE_CROP)
-			sendFrame(detected,n,IMAGE_TYPE_DATASET_SAMPLE)
-		
+			if DEBUG:
+				write2Log("Trying to send to {}:{}\n".format(IP,DEFAULT_PORT),LOGNAME_INFO,True)
+			try:
+				
+				sendFrame(detected,n,INFO_TYPE)
+				sendFrame(detected,n,IMAGE_TYPE_FRAME)
+				sendFrame(detected,n,IMAGE_TYPE_CROP)
+				sendFrame(detected,n,IMAGE_TYPE_DATASET_SAMPLE)
+				if DEBUG:
+					write2Log("Data sended to {}:{}\n".format(IP,DEFAULT_PORT),LOGNAME_INFO,True)
+
+			except ConnectionRefusedError:
+				print("[ERROR] - Failed to connect to the app")
+				ex_info()
+			except OSError:
+				print("[ERROR] - Failed to connect to the app")
+				ex_info()	
+
 			
 	return history,timeouts
 			

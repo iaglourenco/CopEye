@@ -26,9 +26,14 @@ ap.add_argument("--interface",help="show minimal interface while running",requir
 ap.add_argument("--interface2",help="show full interface while running",required=False,action="store_true",default=False)
 ap.add_argument("--opencv",help="Use opencv model to extract embeddings",required=False,action="store_true")
 ap.add_argument("--android",help="send data to the android app",required=False,action="store_true",default=False)
-
+ap.add_argument("--log",help="save detections log to the disk, a echo to a file of the option '-d'",required=False,action="store_true",default=False)
 args = vars(ap.parse_args())
 
+
+
+
+if args["log"]:
+	write2Log("#Frame no. - Best Match <-> Predicted = Distance : Probability - No. of matches",DETECTION_LOGNAME,supressDateHeader=True,append=False)
 
 if args["opencv"]:	
 	#Use openCV model
@@ -101,155 +106,161 @@ else:
 
 if args["android"]:
 	print("[INFO] - ANDROID MODE - Sending data to {}:{}\n".format(IP,DEFAULT_PORT))
+	os.system("rm -f log/*")
 
 
 try:
 	while vc.isOpened():
-
-		ret,frame = vc.read()# Read a frame
-		frameNo+=1
-		print("{}/{}".format(frameNo,vc.get(cv2.CAP_PROP_FRAME_COUNT)),end='\r')
-		if ret == True and frameNo % 2 == 0:
-			
-			frame = imutils.resize(frame, width=600)
-			#frame = imutils.rotate(frame,angle=90)
-			(h, w) = frame.shape[:2]
-			frameOut = np.copy(frame)
-			
-			imageBlob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 1.0, (300, 300),(104.0, 177.0, 123.0), swapRB=False, crop=False)
-			detector.setInput(imageBlob)
-			detections = detector.forward()
-			
-			for f in range(0, detections.shape[2]):
-				name="Unknown"
-				text = "{}".format(name)
-				confidence = detections[0, 0, f, 2]
-				if confidence > args["c"]:
-					noDetected+=1
-					box = detections[0, 0, f, 3:7] * np.array([w, h, w, h])
-					(startX, startY, endX, endY) = box.astype("int")
-
-					# face = frame[startY:endY, startX:endX]
-
-					# (fH, fW) = face.shape[:2]# Get the face height and weight			
-					# if fW > 250 or fH > 340 or fW < 20 or fH < 20:
-					# 	continue
-
-					al = np.copy(frame)
-					gray=cv2.cvtColor(al,cv2.COLOR_BGR2GRAY)
-					
-					face = fa.align(al,
-					gray,
-					dlib.rectangle(startX,startY,endX,endY))		
-						
-					if noDetected > 0 and args['interface2']:
-						cv2.imshow("Face#{}".format(f),face)
-					
-					frameEmb=np.empty(128,)
-					if opencv:
-						faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,(96, 96), (0, 0, 0), swapRB=True, crop=False)
-						emb.setInput(faceBlob)
-						frameEmb = emb.forward()
-						frameEmb = frameEmb.flatten()		
-					else:
-						rgb = cv2.cvtColor(face,cv2.COLOR_BGR2RGB)
-						encodings=[]
-						locations = face_recognition.face_locations(rgb,model="cnn")
-						encodings = face_recognition.face_encodings(rgb,num_jitters=1,model="large")
-						for enc in encodings:
-							frameEmb=enc
-					
-					
-				#Compare the face embedding of te frame with all faces registered on the dataset
-					distances=np.empty(len(knownEmbeddings),)
-					distances = face_recognition.face_distance(knownEmbeddings,frameEmb)
-					
-					faceDistances={}
-					matchCount={}
-					matchInfo={}
-					for (i,d) in enumerate(distances):
-						if d <= args["t"]:
-
-							n = knownNames[i]
-							matchCount[n] = matchCount.get(n,0)+1
-							matchInfo[n+"distance"] = faceDistances.get(i,max(distances))
-							if matchInfo.get(n+"distance",0) > d:
-								matchInfo[n+"index"] = i
-								matchInfo[n+"distance"] = d
-						
-						faceDistances[i] = faceDistances.get(i,max(distances))
-						if d < faceDistances[i]: 
-							faceDistances[i]=d
-								
-					ind = min(faceDistances,key=faceDistances.get) # Get the name with minimum distance
-					distance = faceDistances.get(ind)
-					probability = distance2conf(distance,args["t"])
-
-					if len(matchCount) > 0:
-						matchName = max(matchCount,key=matchCount.get)
-						matchInd = matchInfo.get(matchName+"index")
-						matchDis = matchInfo.get(matchName+"distance")
-						nOfMatches = (matchCount.get(matchName))
-						if matchDis <= distance and nOfMatches > 1:
-							ind = matchInd
-							name = knownNames[ind]
-							probability = distance2conf(distance,args["t"])
-					else:
-						distance+=distance
-							
-							
-					name = knownNames[ind]				
-					faceComparedPath = facePaths[ind]
-					
-					if probability >= args["p"] : 
-						text = "#{}-{} : {:.2f}%".format(f,name, probability*100)
-						if args['android']:
-							detectedInFrame = createDetectedStruct(detectedInFrame,(probability,name,frameOut,face,faceComparedPath,frameNo))
-					else:
-						name="Unknown"
-					
-					y = startY - 10 if startY - 10 > 10 else startY + 10
-					cv2.rectangle(frameOut, (startX, startY), (endX, endY),(0, 0, 255), 2)
-					cv2.putText(frameOut, text, (startX, y),cv2.FONT_ITALIC,.45, (0, 255, 255), 2)
-
-					if len(detectedInFrame) > 0 and time.clock() - timeout2Send > 2 and args["android"]:
-						print('Checking...')
-						timeout2Send=time.clock()
-						history,timeouts = updateFrequency(detectedInFrame,history,timeouts)
-						detectedInFrame.clear()
-						
-						
-					if args['interface2']:
-						faceCompared = cv2.imread(faceComparedPath)
-						if not faceCompared is None:
-							imutils.resize(faceCompared,width=600,height=600)
-							cv2.imshow("Face#{} Best match".format(f),faceCompared)
-					
-
-					if args["d"]:
-							print("\nFace#{}\nLooks like = {}\nPredicted = {}\nDistance = {}\nProbability = {:.2f}%\nMatch count = {}\n".format(f,knownNames[ind],name,distance,probability*100,matchCount.get(name,-1)))
-
+		try:	
+			ret,frame = vc.read()# Read a frame
+			frameNo+=1
+			print("{}/{}".format(frameNo,vc.get(cv2.CAP_PROP_FRAME_COUNT)),end='\r')
+			if ret == True and frameNo % 2 == 0:
 				
+				frame = imutils.resize(frame, width=600)
+				#frame = imutils.rotate(frame,angle=90)
+				(h, w) = frame.shape[:2]
+				frameOut = np.copy(frame)
+				
+				imageBlob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 1.0, (300, 300),(104.0, 177.0, 123.0), swapRB=False, crop=False)
+				detector.setInput(imageBlob)
+				detections = detector.forward()
+				
+				for f in range(0, detections.shape[2]):
+					name="Unknown"
+					text = "{}".format(name)
+					confidence = detections[0, 0, f, 2]
+					if confidence > args["c"]:
+						noDetected+=1
+						box = detections[0, 0, f, 3:7] * np.array([w, h, w, h])
+						(startX, startY, endX, endY) = box.astype("int")
 
-			noDetected=0
-			out.write(frameOut)
-			if args['interface2'] or args['interface']:
-				cv2.imshow("Output Preview",frameOut)		
-			fps.update()
+						# face = frame[startY:endY, startX:endX]
 
-			key = cv2.waitKey(1) & 0xFF
-			if key == ord("p"):
-				pause=True
-				print("Paused",end='\r')
-				while pause or key == ord("p"):
-					key = cv2.waitKey(1) & 0xFF
-					if key == ord("p"):
-						pause = False
-			if key == ord("q"):
+						# (fH, fW) = face.shape[:2]# Get the face height and weight			
+						# if fW > 250 or fH > 340 or fW < 20 or fH < 20:
+						# 	continue
+
+						al = np.copy(frame)
+						gray=cv2.cvtColor(al,cv2.COLOR_BGR2GRAY)
+						
+						face = fa.align(al,
+						gray,
+						dlib.rectangle(startX,startY,endX,endY))		
+							
+						if noDetected > 0 and args['interface2']:
+							cv2.imshow("Face#{}".format(f),face)
+						
+						frameEmb=np.empty(128,)
+						if opencv:
+							faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,(96, 96), (0, 0, 0), swapRB=True, crop=False)
+							emb.setInput(faceBlob)
+							frameEmb = emb.forward()
+							frameEmb = frameEmb.flatten()		
+						else:
+							rgb = cv2.cvtColor(face,cv2.COLOR_BGR2RGB)
+							encodings=[]
+							locations = face_recognition.face_locations(rgb,model="cnn")
+							encodings = face_recognition.face_encodings(rgb,num_jitters=1,model="large")
+							for enc in encodings:
+								frameEmb=enc
+						
+						
+					#Compare the face embedding of te frame with all faces registered on the dataset
+						distances=np.empty(len(knownEmbeddings),)
+						distances = face_recognition.face_distance(knownEmbeddings,frameEmb)
+						
+						faceDistances={}
+						matchCount={}
+						matchInfo={}
+						for (i,d) in enumerate(distances):
+							if d <= args["t"]:
+
+								n = knownNames[i]
+								matchCount[n] = matchCount.get(n,0)+1
+								matchInfo[n+"distance"] = faceDistances.get(i,max(distances))
+								if matchInfo.get(n+"distance",0) > d:
+									matchInfo[n+"index"] = i
+									matchInfo[n+"distance"] = d
+							
+							faceDistances[i] = faceDistances.get(i,max(distances))
+							if d < faceDistances[i]: 
+								faceDistances[i]=d
+									
+						ind = min(faceDistances,key=faceDistances.get) # Get the name with minimum distance
+						distance = faceDistances.get(ind)
+						probability = distance2conf(distance,args["t"])
+
+						if len(matchCount) > 0:
+							matchName = max(matchCount,key=matchCount.get)
+							matchInd = matchInfo.get(matchName+"index")
+							matchDis = matchInfo.get(matchName+"distance")
+							nOfMatches = (matchCount.get(matchName))
+							if matchDis <= distance and nOfMatches > 1:
+								ind = matchInd
+								name = knownNames[ind]
+								probability = distance2conf(distance,args["t"])
+						else:
+							distance+=distance
+								
+								
+						name = knownNames[ind]				
+						faceComparedPath = facePaths[ind]
+						
+						if probability >= args["p"] : 
+							text = "#{}-{} : {:.2f}%".format(f,name, probability*100)
+							if args['android']:
+								detectedInFrame = createDetectedStruct(detectedInFrame,(probability,name,frameOut,face,faceComparedPath,frameNo))
+						else:
+							name="Unknown"
+						
+						y = startY - 10 if startY - 10 > 10 else startY + 10
+						cv2.rectangle(frameOut, (startX, startY), (endX, endY),(0, 0, 255), 2)
+						cv2.putText(frameOut, text, (startX, y),cv2.FONT_ITALIC,.45, (0, 255, 255), 2)
+
+						if len(detectedInFrame) > 0 and time.clock() - timeout2Send > 2 and args["android"]:
+							print('Checking...')
+							timeout2Send=time.clock()
+							history,timeouts = updateFrequency(detectedInFrame,history,timeouts)
+							detectedInFrame.clear()
+							
+							
+						if args['interface2']:
+							faceCompared = cv2.imread(faceComparedPath)
+							if not faceCompared is None:
+								imutils.resize(faceCompared,width=600,height=600)
+								cv2.imshow("Face#{} Best match".format(f),faceCompared)
+						
+
+						if args["d"]:
+								print("\nFace#{}\nLooks like = {}\nPredicted = {}\nDistance = {}\nProbability = {:.2f}%\nMatch count = {}\n".format(f,knownNames[ind],name,distance,probability*100,matchCount.get(name,"NULL")))
+
+						if args['log']:
+							detectionLog = "#{} - {} <-> {} = {} : {:.2f}% - {} match(s)".format(frameNo,knownNames[ind],name,distance,probability*100,matchCount.get(name,"NULL"))
+							write2Log(detectionLog,DETECTION_LOGNAME,supressDateHeader=True)
+
+				noDetected=0
+				out.write(frameOut)
+				if args['interface2'] or args['interface']:
+					cv2.imshow("Output Preview",frameOut)		
+				fps.update()
+
+				key = cv2.waitKey(1) & 0xFF
+				if key == ord("p"):
+					pause=True
+					print("Paused",end='\r')
+					while pause or key == ord("p"):
+						key = cv2.waitKey(1) & 0xFF
+						if key == ord("p"):
+							pause = False
+				if key == ord("q"):
+					print("\nStopped by the user")
+					raise KeyboardInterrupt
+			elif ret == False:
 				raise KeyboardInterrupt
-
+		except Exception:
+			ex_info()
 except KeyboardInterrupt:
-	print("\nStopped by the user")
 	fps.stop()
 	print("[INFO] - elapsed time: {:.2f}".format(fps.elapsed()))
 	print("[INFO] - approx. FPS: {:.2f}".format(fps.fps()))
@@ -259,8 +270,6 @@ except KeyboardInterrupt:
 
 	time.sleep(2)
 	exit()
-except Exception as e:
-	print("[ERROR] - Error during execution")
-	ex_info()
+
 
 	 
