@@ -19,7 +19,7 @@ ap.add_argument("-d",help="show information about processing",required=False,act
 ap.add_argument("-c",help="minimum confidence to find face on the frame",required=False,type=float,default=0.8)
 ap.add_argument("-p",help="minimum confidence to predict a person, matches in dataset",required=False,type=float,default=0.85)
 ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.6)
-ap.add_argument("--opencv",help="use opencv model to extract embeddings",required=False,action="store_true")
+ap.add_argument("--opencv",help="use opencv model to extract embeddings,less accurate",required=False,action="store_true")
 ap.add_argument("--interface",help="show minimal interface while running",required=False,action="store_true",default=False)
 ap.add_argument("--interface2",help="show full interface while running",required=False,action="store_true",default=False)
 ap.add_argument("--android",help="send data to the android app",required=False,action="store_true",default=False)
@@ -118,19 +118,22 @@ try:
 
 			if frameNo %2 == 0:
 				#Extract the blob of image to put in detector
+				
 				imageBlob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 1.0, (300, 300),(104.0, 177.0, 123.0), swapRB=False, crop=False)
 				detector.setInput(imageBlob) # Realize detection
 				detections = detector.forward()
-
+				
 				for f in range(0, detections.shape[2]):# For each face detected
 					name="Unknown"
-					
+				
 					confidence = detections[0, 0, f, 2]#Extract the confidence returned by the detector
-					
+				
 					if confidence >= 0.9: #Compare with the confidence passed by argument
 						noDetected+=1 #Faces detected in the frame counter
+						
 						box = detections[0, 0, f, 3:7] * np.array([w, h, w, h])# Convert the positions to a np.array
 						(startX, startY, endX, endY) = box.astype("int")# Get the coordinates to cut the face from the frame
+						
 						
 						# face = frame[startY:endY, startX:endX] #Extract the face from the frame
 						# (fH, fW) = face.shape[:2]# Get the face height and weight			
@@ -155,14 +158,20 @@ try:
 							frameEmb = emb.forward()		
 							frameEmb = frameEmb.flatten()
 						else:#Using dlib to extract the embeddings
-							rgb = cv2.cvtColor(face,cv2.COLOR_BGR2RGB)
-							locations = face_recognition.face_locations(rgb,model="cnn")
-							encodings = face_recognition.face_encodings(rgb,locations,num_jitters=2,model="large")
+							rgb = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+							encodings=[]
+							# locations = face_recognition.face_locations(rgb,model="hog")
+							# encodings = face_recognition.face_encodings(rgb,locations,num_jitters=2,model="large")
+						
+							encodings = face_recognition.face_encodings(rgb,[(startY,endX,endY,startX)],num_jitters=2,model="large")
 							for enc in encodings:
 								frameEmb=enc
+
+
 						#Compare the face embedding of te frame with all faces registered on the dataset
 						distances=np.empty(len(knownEmbeddings),)
 						distances = face_recognition.face_distance(knownEmbeddings,frameEmb)
+
 						faceDistances={}
 						matchCount={}
 						matchInfo={}

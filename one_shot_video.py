@@ -24,7 +24,7 @@ ap.add_argument("-p",help="Minimum confidence to predict a person, matches in da
 ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.6)
 ap.add_argument("--interface",help="show minimal interface while running",required=False,action="store_true",default=False)
 ap.add_argument("--interface2",help="show full interface while running",required=False,action="store_true",default=False)
-ap.add_argument("--opencv",help="Use opencv model to extract embeddings",required=False,action="store_true")
+ap.add_argument("--opencv",help="Use opencv model to extract embeddings,less accurate",required=False,action="store_true")
 ap.add_argument("--android",help="send data to the android app",required=False,action="store_true",default=False)
 ap.add_argument("--log",help="save detections log to the disk, a echo to a file of the option '-d'",required=False,action="store_true",default=False)
 args = vars(ap.parse_args())
@@ -99,7 +99,7 @@ fps = FPS().start()
 frameNo=1
 pause = False
 
-if args['interface']:
+if args['interface'] or args['interface2']:
 	print("[INFO] - Starting video stream - Press 'p' to pause and 'q' to quit")
 else:
 	print("[INFO] - NO INTERFACE MODE - Press 'Ctrl+C' to quit")
@@ -151,22 +151,24 @@ try:
 						if noDetected > 0 and args['interface2']:
 							cv2.imshow("Face#{}".format(f),face)
 						
-						frameEmb=np.empty(128,)
-						if opencv:
+						frameEmb = np.empty(128,)
+						if opencv:#Using openCV to extract the frame embeddings
 							faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,(96, 96), (0, 0, 0), swapRB=True, crop=False)
 							emb.setInput(faceBlob)
 							frameEmb = emb.forward()
 							frameEmb = frameEmb.flatten()		
-						else:
-							rgb = cv2.cvtColor(face,cv2.COLOR_BGR2RGB)
+						else:#Using dlib to extract the embeddings
+							rgb = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
 							encodings=[]
-							locations = face_recognition.face_locations(rgb,model="cnn")
-							encodings = face_recognition.face_encodings(rgb,num_jitters=1,model="large")
+							# locations = face_recognition.face_locations(rgb,model="cnn")
+							# encodings = face_recognition.face_encodings(rgb,num_jitters=1,model="large")
+
+							encodings = face_recognition.face_encodings(rgb,[(startY,endX,endY,startX)],num_jitters=2,model="large")							
 							for enc in encodings:
 								frameEmb=enc
 						
 						
-					#Compare the face embedding of te frame with all faces registered on the dataset
+						#Compare the face embedding of te frame with all faces registered on the dataset
 						distances=np.empty(len(knownEmbeddings),)
 						distances = face_recognition.face_distance(knownEmbeddings,frameEmb)
 						
