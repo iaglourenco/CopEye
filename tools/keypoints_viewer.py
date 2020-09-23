@@ -13,16 +13,17 @@ import dlib
 import argparse
 import keyboard
 
+
 ap = argparse.ArgumentParser()
 ap.add_argument("-c",help="minimum confidence to find face on the frame",required=False,type=float,default=0.8)
 args = vars(ap.parse_args())
 
 #Face detector, return the position of the faces in the image
 print("[INFO] - Loading face detector")
-detector = cv2.dnn.readNetFromCaffe("../one_shot/models/face_detection_model/deploy.prototxt",
-			"../one_shot/models/face_detection_model/res10_300x300_ssd_iter_140000.caffemodel")
+detector = cv2.dnn.readNetFromCaffe("../models/face_detection_model/deploy.prototxt",
+			"../models/face_detection_model/res10_300x300_ssd_iter_140000.caffemodel")
 
-sp = dlib.shape_predictor("../one_shot/models/shape_predictor_68_face_landmarks.dat")
+sp = dlib.shape_predictor("../models/shape_predictor_68_face_landmarks.dat")
 fa = FaceAligner(sp)
 
 

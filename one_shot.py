@@ -18,7 +18,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("-d",help="show information about processing",required=False,action="store_true")
 ap.add_argument("-c",help="minimum confidence to find face on the frame",required=False,type=float,default=0.8)
 ap.add_argument("-p",help="minimum confidence to predict a person, matches in dataset",required=False,type=float,default=0.85)
-ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.7)
+ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.6)
 ap.add_argument("--opencv",help="use opencv model to extract embeddings",required=False,action="store_true")
 ap.add_argument("--interface",help="show minimal interface while running",required=False,action="store_true",default=False)
 ap.add_argument("--interface2",help="show full interface while running",required=False,action="store_true",default=False)
@@ -27,6 +27,9 @@ ap.add_argument("--log",help="save detections log to the disk, a echo to a file 
 
 
 args = vars(ap.parse_args())
+
+if args["log"]:
+	write2Log("#Frame no. - Best Match <-> Predicted = Distance : Probability - No. of matches",DETECTION_LOGNAME,supressDateHeader=True,append=False)
 
 
 if args["opencv"]:	
@@ -54,6 +57,7 @@ knownEmbeddings = []
 knownNames = []
 facePaths = []
 noDetected=0
+
 
 frameEmb = np.empty((128,))
 proba = 0
@@ -128,13 +132,13 @@ try:
 						box = detections[0, 0, f, 3:7] * np.array([w, h, w, h])# Convert the positions to a np.array
 						(startX, startY, endX, endY) = box.astype("int")# Get the coordinates to cut the face from the frame
 						
-						# boxFace = frame[startY:endY, startX:endX] #Extract the face from the frame
-						# (fH, fW) = boxFace.shape[:2]# Get the face height and weight			
+						# face = frame[startY:endY, startX:endX] #Extract the face from the frame
+						# (fH, fW) = face.shape[:2]# Get the face height and weight			
 						# if fW > 250 or fH > 340 or fW < 20 or fH < 20:
 						# 	continue
 						
 						
-						#Face alignment
+						# Face alignment
 						al = np.copy(frame)
 						gray=cv2.cvtColor(al,cv2.COLOR_BGR2GRAY)
 						face = fa.align(al,

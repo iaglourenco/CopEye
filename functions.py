@@ -26,9 +26,10 @@ LOGNAME_ERR="logerr"
 LOGNAME_INFO = "loginfo"
 DETECTION_LOGNAME = "detectionLog"
 
-os.system("echo '' > {}".format(LOGNAME_ERR))
+#Clear old logs at the start
+os.system("rm -f {}".format(LOGNAME_ERR))
 if DEBUG:
-	os.system("echo '' > {}".format(LOGNAME_INFO))
+	os.system("rm -f {}".format(LOGNAME_INFO))
 
 
 def ex_info():
@@ -39,6 +40,7 @@ def ex_info():
 	
 
 def write2Log(text,logtype,print_terminal=False,supressDateHeader=False,append=True):
+	#write data to the log
 	header="\r"
 	if supressDateHeader == False:
 		header = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
@@ -87,7 +89,7 @@ def sendFrame(detected,name,typeOfSend):
 			print("[ERROR] - Failed to save frame to log")
 			ex_info()
 			raise IOError
-		sendBytes(pathFrame, typeOfSend)
+		_sendBytes(pathFrame, typeOfSend)
 			
 	elif typeOfSend == IMAGE_TYPE_CROP:
 		pathCrop = "./log/{}-{}-{}_face_crop.jpg".format(frameN, name, tempo)
@@ -98,23 +100,23 @@ def sendFrame(detected,name,typeOfSend):
 			print("[ERROR] - Failed to save face crop to log")
 			ex_info()
 			raise IOError
-		sendBytes(pathCrop, typeOfSend)
+		_sendBytes(pathCrop, typeOfSend)
 	
 	elif typeOfSend == IMAGE_TYPE_DATASET_SAMPLE:
-		sendBytes(faceComparedPath,typeOfSend)
+		_sendBytes(faceComparedPath,typeOfSend)
 	
 	elif typeOfSend == INFO_TYPE:
 		msg = " " + name + "\n" + " "+ tempo + "\n" +" "+str(round(probability*100,2))+"%" + "\n"+ "\0"
 		msg = msg.ljust(1024,"0")
-		sendBytes(msg, typeOfSend)
+		_sendBytes(msg, typeOfSend)
 
 	else:
 		raise ValueError
 
 
 
-def sendBytes(data, dataType):
-
+def _sendBytes(data, dataType):
+	#Send the content through socket
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)		
 		s.connect((IP, DEFAULT_PORT))	
 
@@ -140,7 +142,7 @@ def createDetectedStruct(detected,dataTuple):
 	# Update detected with data provided by dataTuple
  	# :param detected: a empty dict, or a previously initiated dict
 	# :param dataTuple: a tuple with these fields: (probability,frame,face_crop,faceComparedPath,frameNo)
-	# :return: a updated detected
+	# :return: a updated detected dictionary
 	probability =dataTuple[0]
 	name=dataTuple[1]
 	frame=dataTuple[2]
