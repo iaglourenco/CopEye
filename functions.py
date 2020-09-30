@@ -6,6 +6,13 @@ import time
 import os
 import cv2
 import traceback
+import imutils
+import numpy as np
+import dlib
+from imutils.face_utils.facealigner import FaceAligner
+import face_recognition
+import pickle
+from threading import Thread
 
 MINIMAL_OCURRENCE = 5
 TIMEOUT_2_SEND = 5
@@ -38,7 +45,6 @@ def ex_info():
 	print(exception)
 	write2Log(exception,LOGNAME_ERR)
 	
-
 def write2Log(text,logtype,print_terminal=False,supressDateHeader=False,append=True):
 	#write data to the log
 	header="\r"
@@ -52,7 +58,6 @@ def write2Log(text,logtype,print_terminal=False,supressDateHeader=False,append=T
 
 	if(print_terminal):
 		print(text)
-
 
 def distance2conf(face_distance,tolerance):
     # Calculate confidence based on the distance and tolerance
@@ -89,7 +94,7 @@ def sendFrame(detected,name,typeOfSend):
 			print("[ERROR] - Failed to save frame to log")
 			ex_info()
 			raise IOError
-		_sendBytes(pathFrame, typeOfSend)
+		__sendBytes(pathFrame, typeOfSend)
 			
 	elif typeOfSend == IMAGE_TYPE_CROP:
 		pathCrop = "./log/{}-{}-{}_face_crop.jpg".format(frameN, name, tempo)
@@ -100,22 +105,20 @@ def sendFrame(detected,name,typeOfSend):
 			print("[ERROR] - Failed to save face crop to log")
 			ex_info()
 			raise IOError
-		_sendBytes(pathCrop, typeOfSend)
+		__sendBytes(pathCrop, typeOfSend)
 	
 	elif typeOfSend == IMAGE_TYPE_DATASET_SAMPLE:
-		_sendBytes(faceComparedPath,typeOfSend)
+		__sendBytes(faceComparedPath,typeOfSend)
 	
 	elif typeOfSend == INFO_TYPE:
 		msg = " " + name + "\n" + " "+ tempo + "\n" +" "+str(round(probability*100,2))+"%" + "\n"+ "\0"
 		msg = msg.ljust(1024,"0")
-		_sendBytes(msg, typeOfSend)
+		__sendBytes(msg, typeOfSend)
 
 	else:
 		raise ValueError
 
-
-
-def _sendBytes(data, dataType):
+def __sendBytes(data, dataType):
 	#Send the content through socket
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)		
 		s.connect((IP, DEFAULT_PORT))	
@@ -135,8 +138,6 @@ def _sendBytes(data, dataType):
 					
 	
 		s.close()	
-
-
 
 def createDetectedStruct(detected,dataTuple):
 	# Update detected with data provided by dataTuple
@@ -158,33 +159,46 @@ def createDetectedStruct(detected,dataTuple):
 
 	return detected
 
+def thread_call(detected,n):
+	
+	sendFrame(detected,n,INFO_TYPE)
+	sendFrame(detected,n,IMAGE_TYPE_FRAME)
+	sendFrame(detected,n,IMAGE_TYPE_CROP)
+	sendFrame(detected,n,IMAGE_TYPE_DATASET_SAMPLE)
+
 
 def updateFrequency(detected,history,timeouts):	
 	#Recebe o dict com as pessoas detectadas, historico atual e os timeouts verifica se esta na hora de enviar dados ou não
 	#retorna o historico e os timeouts atualizados
 	for n in detected:
 		history[n] = history.get(n,0)+1
-		timeouts[n]=timeouts.get(n,time.clock())
+		timeouts[n]=timeouts.get(n,time.process_time())
 
 
 		if DEBUG:
 			write2Log("OCURRENCE OF {}={}\nACTUAL TIMEOUT= {}\n".format(n,history[n],timeouts[n]),LOGNAME_INFO)
 
 
-		if history[n] == MINIMAL_OCURRENCE and time.clock() - timeouts[n] > TIMEOUT_2_SEND:
+		if history[n] == MINIMAL_OCURRENCE and time.process_time() - timeouts[n] > TIMEOUT_2_SEND:
 			history[n]=0
-			timeouts[n]=time.clock()	
+			timeouts[n]=time.process_time()	
 			
 		elif history[n] == 1:
-			timeouts[n]=time.clock()
+			timeouts[n]=time.process_time()
 			if DEBUG:
 				write2Log("Trying to send to {}:{}\n".format(IP,DEFAULT_PORT),LOGNAME_INFO,True)
 			try:
 				
-				sendFrame(detected,n,INFO_TYPE)
-				sendFrame(detected,n,IMAGE_TYPE_FRAME)
-				sendFrame(detected,n,IMAGE_TYPE_CROP)
-				sendFrame(detected,n,IMAGE_TYPE_DATASET_SAMPLE)
+				
+				
+				t=Thread(target=thread_call,args=(detected,n))
+				t.start()
+				
+				
+				# sendFrame(detected,n,INFO_TYPE)
+				# sendFrame(detected,n,IMAGE_TYPE_FRAME)
+				# sendFrame(detected,n,IMAGE_TYPE_CROP)
+				# sendFrame(detected,n,IMAGE_TYPE_DATASET_SAMPLE)
 				if DEBUG:
 					write2Log("Data sended to {}:{}\n".format(IP,DEFAULT_PORT),LOGNAME_INFO,True)
 
@@ -198,3 +212,153 @@ def updateFrequency(detected,history,timeouts):
 			
 	return history,timeouts
 			
+def update_db_encodings(names,imagePaths):
+	#update the default database of faces
+	try:
+		knownEmbeddings = []
+		knownNames=[]
+		facePaths=[]
+		f = open('known/db_embeddings.pickle','rb')
+		db_enc = pickle.loads(f.read())
+		f.close()
+		print('Reading and updating file')
+		for e in db_enc["embeddings"]:
+			knownEmbeddings.append(e)
+
+		for n in db_enc["names"]:
+			knownNames.append(n)
+
+		for fp in db_enc["facePaths"]:
+			facePaths.append(fp)
+	except FileNotFoundError:
+		print('Creating file')
+	
+	
+	for (i,facePath) in enumerate(imagePaths):
+		enc = extract_embeddings_from_image_file(facePath)
+		if enc is not None:
+			knownEmbeddings.append(enc)
+			knownNames.append(names[i])
+			facePaths.append(facePath)
+		
+	f = open('known/db_embeddings.pickle','wb')
+	data = {'embeddings':knownEmbeddings,
+			'names':knownNames,
+			'facePaths':facePaths}
+	
+	f.write(pickle.dumps(data))
+	f.close()
+
+def update_user_encodings(names,imagePaths):
+	#update the user database of faces
+	try:
+		knownEmbeddings = []
+		knownNames=[]
+		facePaths=[]
+		f = open('known/user_embeddings.pickle','rb')
+		user_enc = pickle.loads(f.read())
+		f.close()
+		print('Reading and updating file')
+		for e in user_enc["embeddings"]:
+			knownEmbeddings.append(e)
+
+		for n in user_enc["names"]:
+			knownNames.append(n)
+
+		for fp in user_enc["facePaths"]:
+			facePaths.append(fp)
+	except FileNotFoundError:
+		print('Creating file')
+	
+	
+	for (i,facePath) in enumerate(imagePaths):
+		enc = extract_embeddings_from_image_file(facePath)
+		if enc is not None:
+			knownEmbeddings.append(enc)
+			knownNames.append(names[i])
+			facePaths.append(facePath)
+	
+	f = open('known/user_embeddings.pickle','wb')
+	data = {'embeddings':knownEmbeddings,
+			'names':knownNames,
+			'facePaths':facePaths}
+	f.write(pickle.dumps(data))
+	f.close()
+
+def extract_embeddings_from_image_file(imagePath):
+	#Return the encoding for a imgae file, assume that is one face in the frame
+
+	#Load the face detector
+	detector = cv2.dnn.readNetFromCaffe('models/face_detection_model/deploy.prototxt',
+            'models/face_detection_model/res10_300x300_ssd_iter_140000.caffemodel')	
+	
+	image = cv2.imread(imagePath)
+	
+	#Resize the image to put in the detector
+	image = imutils.resize(image,width=600)
+	(h,w) = image.shape[:2]
+	imgBlob = cv2.dnn.blobFromImage(
+        cv2.resize(image,(300,300)),
+        1.0,
+        (300,300),
+        (104.0,177.0,123.0),
+        swapRB=False,
+        crop=False
+        )
+	
+	#Perform detection
+	detector.setInput(imgBlob)
+	detections = detector.forward()
+	
+	#Assuming that is just one face on the image
+	if len(detections)>0:
+		j = np.argmax(detections[0,0,:,2])
+		confidence = detections[0,0,j,2]
+		if confidence > 0.6:
+			box = detections[0,0,j,3:7] * np.array([w,h,w,h])
+			(startX,startY,endX,endY) = box.astype('int')
+			
+			(fH,fW) = image[startY:endY,startX:endX].shape[:2]
+			if fW < 20 or fH <20:
+				return None
+
+			#extract the encoding
+			face_encodings = __extract_encoding(image)
+		
+			return face_encodings
+	else:
+		return None
+
+def __extract_encoding(frame):
+
+	#Return a encoding for the frame, assuming that is one face in the frame
+
+	rgb = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+	encodings=[]
+	locations = face_recognition.face_locations(rgb,model="hog")
+	if len(locations) == 0:
+		return None
+	# encodings = face_recognition.face_encodings(rgb,[(startY,endX,endY,startX)],num_jitters=2,model="large")
+	encodings = face_recognition.face_encodings(rgb,locations,num_jitters=10,model="large")
+	for enc in encodings:
+		emb=enc
+
+	return emb
+
+def align_faces(imagePaths):
+	#Align faces found in imagePaths, overwrite original with the aligned face
+
+	detector = dlib.get_frontal_face_detector()
+	predictor = dlib.shape_predictor("../one_shot/models/shape_predictor_68_face_landmarks.dat")
+	fa = FaceAligner(predictor,desiredFaceHeight=256)
+
+	for i,imagePath in enumerate(imagePaths):
+	    print("[INFO] - Aligning face #{}".format(i))
+	    image = cv2.imread(imagePath)
+	    image = imutils.resize(image,width=800)
+	    gray = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
+
+	    rects = detector(gray,2)
+	    for rect in rects:
+	        image = fa.align(image,gray,rect)
+	        cv2.imwrite(imagePath,image) 

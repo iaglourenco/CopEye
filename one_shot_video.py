@@ -24,7 +24,6 @@ ap.add_argument("-p",help="Minimum confidence to predict a person, matches in da
 ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.6)
 ap.add_argument("--interface",help="show minimal interface while running",required=False,action="store_true",default=False)
 ap.add_argument("--interface2",help="show full interface while running",required=False,action="store_true",default=False)
-ap.add_argument("--opencv",help="Use opencv model to extract embeddings,less accurate",required=False,action="store_true")
 ap.add_argument("--android",help="send data to the android app",required=False,action="store_true",default=False)
 ap.add_argument("--log",help="save detections log to the disk, a echo to a file of the option '-d'",required=False,action="store_true",default=False)
 args = vars(ap.parse_args())
@@ -32,18 +31,14 @@ args = vars(ap.parse_args())
 
 
 
+
 if args["log"]:
 	write2Log("#Frame no. - Best Match <-> Predicted = Distance : Probability - No. of matches",DETECTION_LOGNAME,supressDateHeader=True,append=False)
 
-if args["opencv"]:	
-	#Use openCV model
-    opencv=True
-    print("[INFO] - Loading OpenCV embedding model")
-    emb = cv2.dnn.readNetFromTorch("models/nn4.small1.v1.t7")
-else:
-	#Use dlib model
-    print("[INFO] - Using DLIB embedding model")
-    opencv = False
+
+#Use dlib model
+print("[INFO] - Using DLIB embedding model")
+opencv = False
 	
 #Face detector, return the position of the faces in the image
 print("[INFO] - Loading face detector")
@@ -135,37 +130,31 @@ try:
 						box = detections[0, 0, f, 3:7] * np.array([w, h, w, h])
 						(startX, startY, endX, endY) = box.astype("int")
 
-						# face = frame[startY:endY, startX:endX]
+						face = frame[startY:endY, startX:endX]
+						(fH, fW) = face.shape[:2]# Get the face height and weight			
+						if fW > 250 or fH > 340 or fW < 20 or fH < 20:
+							continue
 
-						# (fH, fW) = face.shape[:2]# Get the face height and weight			
-						# if fW > 250 or fH > 340 or fW < 20 or fH < 20:
-						# 	continue
-
-						al = np.copy(frame)
-						gray=cv2.cvtColor(al,cv2.COLOR_BGR2GRAY)
+						# al = np.copy(frame)
+						# gray=cv2.cvtColor(al,cv2.COLOR_BGR2GRAY)
 						
-						face = fa.align(al,
-						gray,
-						dlib.rectangle(startX,startY,endX,endY))		
+						# face = fa.align(al,
+						# gray,
+						# dlib.rectangle(startX,startY,endX,endY))		
 							
 						if noDetected > 0 and args['interface2']:
 							cv2.imshow("Face#{}".format(f),face)
 						
 						frameEmb = np.empty(128,)
-						if opencv:#Using openCV to extract the frame embeddings
-							faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,(96, 96), (0, 0, 0), swapRB=True, crop=False)
-							emb.setInput(faceBlob)
-							frameEmb = emb.forward()
-							frameEmb = frameEmb.flatten()		
-						else:#Using dlib to extract the embeddings
-							rgb = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
-							encodings=[]
-							# locations = face_recognition.face_locations(rgb,model="cnn")
-							# encodings = face_recognition.face_encodings(rgb,num_jitters=1,model="large")
-
-							encodings = face_recognition.face_encodings(rgb,[(startY,endX,endY,startX)],num_jitters=2,model="large")							
-							for enc in encodings:
-								frameEmb=enc
+								
+						#Using dlib to extract the embeddings
+						rgb = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+						encodings=[]
+						# locations = face_recognition.face_locations(rgb,model="cnn")
+						# encodings = face_recognition.face_encodings(rgb,num_jitters=1,model="large")
+						encodings = face_recognition.face_encodings(rgb,[(startY,endX,endY,startX)],num_jitters=2,model="large")							
+						for enc in encodings:
+							frameEmb=enc
 						
 						
 						#Compare the face embedding of te frame with all faces registered on the dataset
@@ -199,11 +188,12 @@ try:
 							matchDis = matchInfo.get(matchName+"distance")
 							nOfMatches = (matchCount.get(matchName))
 							if matchDis <= distance and nOfMatches > 1:
+								distance-=distance/2
 								ind = matchInd
 								name = knownNames[ind]
 								probability = distance2conf(distance,args["t"])
 						else:
-							distance+=distance
+							distance+=distance/3
 								
 								
 						name = knownNames[ind]				
@@ -220,9 +210,9 @@ try:
 						cv2.rectangle(frameOut, (startX, startY), (endX, endY),(0, 0, 255), 2)
 						cv2.putText(frameOut, text, (startX, y),cv2.FONT_ITALIC,.45, (0, 255, 255), 2)
 
-						if len(detectedInFrame) > 0 and time.clock() - timeout2Send > 2 and args["android"]:
+						if len(detectedInFrame) > 0 and time.process_time() - timeout2Send > 2 and args["android"]:
 							print('Checking...')
-							timeout2Send=time.clock()
+							timeout2Send=time.process_time()
 							history,timeouts = updateFrequency(detectedInFrame,history,timeouts)
 							detectedInFrame.clear()
 							
