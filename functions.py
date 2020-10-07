@@ -12,11 +12,15 @@ import dlib
 from imutils.face_utils.facealigner import FaceAligner
 import face_recognition
 import pickle
-from threading import Thread
+from multiprocessing import Process, Lock
+
+
+mutex = Lock()
 
 MINIMAL_OCURRENCE = 5
 TIMEOUT_2_SEND = 5
 
+#Debug mode
 DEBUG = False
 
 IMAGE_TYPE_FRAME=1
@@ -26,9 +30,12 @@ INFO_TYPE=4
 
 BUFFER_SIZE=1024
 
+#IP and PORT to send the data
 IP = "192.168.1.101"
 DEFAULT_PORT=9700
 
+
+#Filenames of log
 LOGNAME_ERR="logerr"
 LOGNAME_INFO = "loginfo"
 DETECTION_LOGNAME = "detectionLog"
@@ -159,13 +166,49 @@ def createDetectedStruct(detected,dataTuple):
 
 	return detected
 
-def thread_call(detected,n):
-	
-	sendFrame(detected,n,INFO_TYPE)
-	sendFrame(detected,n,IMAGE_TYPE_FRAME)
-	sendFrame(detected,n,IMAGE_TYPE_CROP)
-	sendFrame(detected,n,IMAGE_TYPE_DATASET_SAMPLE)
+def __receiveBytes():
+	s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+	print('Listening')
+	s.bind(('192.168.1.113',5001))
+	s.listen(1)
+	while True:
+		try:
+			ns,address = s.accept()
+			print('Connection from',address)
+			name = "test"
 
+
+			# bName = ns.recv(BUFFER_SIZE)
+			# print(bName)
+			# name = name.join(bName.decode())
+
+			filename = '<NOME-DO-ARQUIVO>'
+			try:
+				os.mkdir('./datasets/{}'.format(name))
+			except Exception:
+				pass
+			with open('./datasets/{}/{}'.format(name,filename),'wb') as f:
+				while True:
+					recvBytes = ns.recv(BUFFER_SIZE)
+					print(recvBytes)
+					if not recvBytes: break
+					f.write(recvBytes)
+			f.close()
+			# update_user_encodings([name],['./datasets/{}/{}.bmp'.format(name,filename)])
+		except Exception as e:
+			ex_info()
+			pass
+
+def __thread_call(detected,n):
+	
+
+	#Mutex is used to ensure the order of send and to prevent to other thread send first
+	# try to acquire the mutex
+	with mutex:
+		sendFrame(detected,n,INFO_TYPE)
+		sendFrame(detected,n,IMAGE_TYPE_FRAME)
+		sendFrame(detected,n,IMAGE_TYPE_CROP)
+		sendFrame(detected,n,IMAGE_TYPE_DATASET_SAMPLE)
 
 def updateFrequency(detected,history,timeouts):	
 	#Recebe o dict com as pessoas detectadas, historico atual e os timeouts verifica se esta na hora de enviar dados ou não
@@ -183,17 +226,16 @@ def updateFrequency(detected,history,timeouts):
 			history[n]=0
 			timeouts[n]=time.process_time()	
 			
-		elif history[n] == 1:
+		elif history[n] == 2:
 			timeouts[n]=time.process_time()
 			if DEBUG:
 				write2Log("Trying to send to {}:{}\n".format(IP,DEFAULT_PORT),LOGNAME_INFO,True)
 			try:
 				
 				
-				
-				t=Thread(target=thread_call,args=(detected,n))
+				# Start a thread to send the data
+				t=Process(target=__thread_call,args=(detected,n))
 				t.start()
-				
 				
 				# sendFrame(detected,n,INFO_TYPE)
 				# sendFrame(detected,n,IMAGE_TYPE_FRAME)
@@ -349,7 +391,7 @@ def align_faces(imagePaths):
 	#Align faces found in imagePaths, overwrite original with the aligned face
 
 	detector = dlib.get_frontal_face_detector()
-	predictor = dlib.shape_predictor("../one_shot/models/shape_predictor_68_face_landmarks.dat")
+	predictor = dlib.shape_predictor("models/shape_predictor_68_face_landmarks.dat")
 	fa = FaceAligner(predictor,desiredFaceHeight=256)
 
 	for i,imagePath in enumerate(imagePaths):
@@ -362,3 +404,6 @@ def align_faces(imagePaths):
 	    for rect in rects:
 	        image = fa.align(image,gray,rect)
 	        cv2.imwrite(imagePath,image) 
+
+
+Process(target=__receiveBytes).start()

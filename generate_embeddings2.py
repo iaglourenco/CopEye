@@ -11,8 +11,8 @@ args = vars(ap.parse_args())
 
 ## Get the images path
 print("[INFO] - Loading images")
-align_faces(args['data'])
 imagePaths = list(paths.list_images(args.get("data")))
+align_faces(imagePaths)
 print("[INFO] - {} images loaded".format(len(imagePaths)))
 names = []
 
