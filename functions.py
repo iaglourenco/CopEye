@@ -167,6 +167,7 @@ def createDetectedStruct(detected,dataTuple):
 	return detected
 
 def __receiveBytes():
+	SEPARATOR ='/'
 	s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 	print('Listening')
 	s.bind(('192.168.1.113',5001))
@@ -175,14 +176,11 @@ def __receiveBytes():
 		try:
 			ns,address = s.accept()
 			print('Connection from',address)
-			name = "test"
+			received = ns.recv(BUFFER_SIZE).decode()
+			filesize, crime, skin_tone, periculosity, name = received.split(SEPARATOR)
+			filename='arquivo'
 
 
-			# bName = ns.recv(BUFFER_SIZE)
-			# print(bName)
-			# name = name.join(bName.decode())
-
-			filename = '<NOME-DO-ARQUIVO>'
 			try:
 				os.mkdir('./datasets/{}'.format(name))
 			except Exception:
@@ -194,7 +192,7 @@ def __receiveBytes():
 					if not recvBytes: break
 					f.write(recvBytes)
 			f.close()
-			# update_user_encodings([name],['./datasets/{}/{}.bmp'.format(name,filename)])
+			update_user_encodings([name],['./datasets/{}/{}.bmp'.format(name,filename)])
 		except Exception as e:
 			ex_info()
 			pass
