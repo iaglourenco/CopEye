@@ -180,7 +180,6 @@ def __receiveBytes():
 			filesize, crime, skin_tone, periculosity, name = received.split(SEPARATOR)
 			filename='arquivo'
 
-
 			try:
 				os.mkdir('./datasets/{}'.format(name))
 			except Exception:
@@ -188,11 +187,10 @@ def __receiveBytes():
 			with open('./datasets/{}/{}'.format(name,filename),'wb') as f:
 				while True:
 					recvBytes = ns.recv(BUFFER_SIZE)
-					print(recvBytes)
 					if not recvBytes: break
 					f.write(recvBytes)
 			f.close()
-			update_user_encodings([name],['./datasets/{}/{}.bmp'.format(name,filename)])
+			update_user_encodings([name],['./datasets/{}/{}'.format(name,filename)])
 		except Exception as e:
 			ex_info()
 			pass
