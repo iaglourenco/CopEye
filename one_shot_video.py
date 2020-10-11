@@ -49,8 +49,15 @@ sp = dlib.shape_predictor("models/shape_predictor_68_face_landmarks.dat")
 fa = FaceAligner(sp)
 
 # Dataset with the embbedings knowned, frames will be compared with each face here
-print("[INFO] - Loading known embeddings")
-data = pickle.loads(open("known/embeddings.pickle","rb").read()) 
+
+db_embeddings=[]
+db_names=[]
+db_facepaths=[]
+
+user_embeddings=[]
+user_names=[]
+user_facepaths=[]
+
 knownEmbeddings = []
 knownNames = []
 facePaths = []
@@ -64,16 +71,19 @@ timeouts={}
 history={}
 detectedInFrame={}
 
-#Loading to variables
-for e in data["embeddings"]:
-	knownEmbeddings.append(e)
+print("[INFO] - Loading known embeddings")
+db_data = pickle.loads(open("known/db_embeddings.pickle","rb").read()) 
 
-for n in data["names"]:
-	knownNames.append(n)
+#Loading to variables
+for e in db_data["embeddings"]:
+	db_embeddings.append(e)
+
+for n in db_data["names"]:
+	db_names.append(n)
 
 #facePaths for each person in the database
-for fp in data["facePaths"]:
-	facePaths.append(fp)
+for fp in db_data["facePaths"]:
+	db_facepaths.append(fp)
 
 
 print("[INFO] - Starting video read")
@@ -106,7 +116,22 @@ if args["android"]:
 
 try:
 	while vc.isOpened():
-		try:	
+		try:
+			if not DATABASE_IS_UPDATED and args['android']:
+				print('Updating user database')
+				user_data = pickle.loads(open('known/user_embeddings.pickle','rb').read())
+				for e in user_data['embeddings']:
+					user_embeddings.append(e)
+				for n in user_data['names']:
+					user_names.append(n)
+				for fp in user_data['facePaths']:
+					user_facepaths.append(fp)
+				knownEmbeddings = db_embeddings + user_embeddings
+				knownNames = db_names + user_names
+				facePaths = db_facepaths + user_facepaths
+				DATABASE_IS_UPDATED = True
+
+
 			ret,frame = vc.read()# Read a frame
 			frameNo+=1
 			print("{}/{}".format(frameNo,vc.get(cv2.CAP_PROP_FRAME_COUNT)),end='\r')

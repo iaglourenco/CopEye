@@ -17,6 +17,8 @@ from multiprocessing import Process, Lock
 
 mutex = Lock()
 
+DATABASE_IS_UPDATED = False
+
 MINIMAL_OCURRENCE = 5
 TIMEOUT_2_SEND = 5
 
@@ -176,7 +178,9 @@ def __receiveBytes():
 		try:
 			ns,address = s.accept()
 			print('Connection from',address)
-			received = ns.recv(BUFFER_SIZE).decode()
+			received = ns.recv(BUFFER_SIZE)
+			print(received)
+			received = received.decode()
 			filesize, crime, skin_tone, periculosity, name = received.split(SEPARATOR)
 			filename='arquivo'
 
@@ -191,6 +195,7 @@ def __receiveBytes():
 					f.write(recvBytes)
 			f.close()
 			update_user_encodings([name],['./datasets/{}/{}'.format(name,filename)])
+			DATABASE_IS_UPDATED = False
 		except Exception as e:
 			ex_info()
 			pass
@@ -285,6 +290,7 @@ def update_db_encodings(names,imagePaths):
 			'facePaths':facePaths}
 	
 	f.write(pickle.dumps(data))
+	print('Sucess')
 	f.close()
 
 def update_user_encodings(names,imagePaths):
@@ -321,6 +327,7 @@ def update_user_encodings(names,imagePaths):
 			'names':knownNames,
 			'facePaths':facePaths}
 	f.write(pickle.dumps(data))
+	print('Sucess')
 	f.close()
 
 def extract_embeddings_from_image_file(imagePath):
