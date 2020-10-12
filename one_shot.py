@@ -102,19 +102,21 @@ time.sleep(2.0)
 
 
 #Initializing variables
-
 try:
 	while True:
 		try:
 			if not DATABASE_IS_UPDATED and args['android']:
-				print('Updating user database')
-				user_data = pickle.loads(open('known/user_embeddings.pickle','rb').read())
-				for e in user_data['embeddings']:
-					user_embeddings.append(e)
-				for n in user_data['names']:
-					user_names.append(n)
-				for fp in user_data['facePaths']:
-					user_facepaths.append(fp)
+				try:
+					user_data = pickle.loads(open('known/user_embeddings.pickle','rb').read())
+					print('Updating user database')
+					for e in user_data['embeddings']:
+						user_embeddings.append(e)
+					for n in user_data['names']:
+						user_names.append(n)
+					for fp in user_data['facePaths']:
+						user_facepaths.append(fp)
+				except FileNotFoundError:
+					pass
 				knownEmbeddings = db_embeddings + user_embeddings
 				knownNames = db_names + user_names
 				facePaths = db_facepaths + user_facepaths

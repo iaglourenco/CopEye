@@ -196,6 +196,8 @@ def __receiveBytes():
 			f.close()
 			update_user_encodings([name],['./datasets/{}/{}'.format(name,filename)])
 			DATABASE_IS_UPDATED = False
+		except KeyboardInterrupt:
+			exit()
 		except Exception as e:
 			ex_info()
 			pass
