@@ -217,25 +217,19 @@ def updateFrequency(detected,history,timeouts):
 	#Recebe o dict com as pessoas detectadas, historico atual e os timeouts verifica se esta na hora de enviar dados ou não
 	#retorna o historico e os timeouts atualizados
 	for n in detected:
-		history[n] = history.get(n,0)+1
-		timeouts[n]=timeouts.get(n,time.process_time())
+		history[n] = history.get(n,0)+1		
+		timeouts[n]=timeouts.get(n,0)
 
 
 		if DEBUG:
-			write2Log("OCURRENCE OF {}={}\nACTUAL TIMEOUT= {}\n".format(n,history[n],timeouts[n]),LOGNAME_INFO)
+			write2Log("OCURRENCE OF {}={}\nACTUAL TIMEOUT= {}\n".format(n,history[n],time.process_time() - timeouts[n]),LOGNAME_INFO)
 
-
-		if history[n] == MINIMAL_OCURRENCE and time.process_time() - timeouts[n] > TIMEOUT_2_SEND:
-			history[n]=0
-			timeouts[n]=time.process_time()	
-			
-		elif history[n] == 2:
+		if history[n] <= MINIMAL_OCURRENCE and time.process_time() - timeouts[n] > TIMEOUT_2_SEND:
 			timeouts[n]=time.process_time()
 			if DEBUG:
 				write2Log("Trying to send to {}:{}\n".format(IP,DEFAULT_PORT),LOGNAME_INFO,True)
-			try:
-				
-				
+
+			try:				
 				# Start a thread to send the data
 				t=Process(target=__thread_call,args=(detected,n))
 				t.start()
@@ -252,9 +246,7 @@ def updateFrequency(detected,history,timeouts):
 				ex_info()
 			except OSError:
 				print("[ERROR] - Failed to connect to the app")
-				ex_info()	
-
-			
+				ex_info()			
 	return history,timeouts
 			
 def update_db_encodings(names,imagePaths):
