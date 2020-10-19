@@ -1,3 +1,5 @@
+# All functions used by the program
+
 import sys
 import math
 from datetime import datetime
@@ -13,17 +15,14 @@ from imutils.face_utils.facealigner import FaceAligner
 import face_recognition
 import pickle
 from multiprocessing import Process, Lock
-
-
+import globalvar
 mutex = Lock()
-
-DATABASE_IS_UPDATED = False
 
 MINIMAL_OCURRENCE = 5
 TIMEOUT_2_SEND = 5
 
 #Debug mode
-DEBUG = False
+DEBUG = True
 
 IMAGE_TYPE_FRAME=1
 IMAGE_TYPE_CROP=2
@@ -36,7 +35,6 @@ BUFFER_SIZE=1024
 IP = "192.168.1.101"
 DEFAULT_PORT=9700
 
-
 #Filenames of log
 LOGNAME_ERR="logerr"
 LOGNAME_INFO = "loginfo"
@@ -47,11 +45,11 @@ os.system("rm -f {}".format(LOGNAME_ERR))
 if DEBUG:
 	os.system("rm -f {}".format(LOGNAME_INFO))
 
-
 def ex_info():
     #Get info about the exception
 	exception = traceback.format_exc()
-	print(exception)
+	if DEBUG:
+		print(exception)
 	write2Log(exception,LOGNAME_ERR)
 	
 def write2Log(text,logtype,print_terminal=False,supressDateHeader=False,append=True):
@@ -171,9 +169,9 @@ def createDetectedStruct(detected,dataTuple):
 def __receiveBytes():
 	SEPARATOR ='/'
 	s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-	print('Listening')
-	s.bind(('192.168.1.113',5001))
+	s.bind(('',5001)) # Accept connection from any address
 	s.listen(1)
+	print('Listening on',5001)
 	while True:
 		try:
 			ns,address = s.accept()
@@ -181,21 +179,31 @@ def __receiveBytes():
 			received = ns.recv(BUFFER_SIZE)
 			print(received)
 			received = received.decode()
-			filesize, crime, skin_tone, periculosity, name = received.split(SEPARATOR)
+			filesize, crime, periculosity, name = received.split(SEPARATOR)
 			filename='arquivo'
 
 			try:
 				os.mkdir('./datasets/{}'.format(name))
-			except Exception:
+				write2Log('Creating folder for {}'.format(name),LOGNAME_INFO,True)
+
+			except FileExistsError:
+				write2Log('Appending photo to {} folder'.format(name),LOGNAME_INFO,True)
 				pass
 			with open('./datasets/{}/{}'.format(name,filename),'wb') as f:
 				while True:
-					recvBytes = ns.recv(BUFFER_SIZE)
+					recvBytes = ns.recv(int(filesize))
 					if not recvBytes: break
 					f.write(recvBytes)
 			f.close()
-			update_user_encodings([name],['./datasets/{}/{}'.format(name,filename)])
-			DATABASE_IS_UPDATED = False
+			try:
+				update_user_encodings([name],['./datasets/{}/{}'.format(name,filename)])
+				globalvar.event.set()
+	
+			except Exception :
+				print('Failed')
+				ex_info()
+				
+			
 		except KeyboardInterrupt:
 			exit()
 		except Exception as e:
@@ -284,7 +292,7 @@ def update_db_encodings(names,imagePaths):
 			'facePaths':facePaths}
 	
 	f.write(pickle.dumps(data))
-	print('Sucess')
+	print('Success')
 	f.close()
 
 def update_user_encodings(names,imagePaths):
@@ -321,7 +329,6 @@ def update_user_encodings(names,imagePaths):
 			'names':knownNames,
 			'facePaths':facePaths}
 	f.write(pickle.dumps(data))
-	print('Sucess')
 	f.close()
 
 def extract_embeddings_from_image_file(imagePath):
@@ -402,5 +409,11 @@ def align_faces(imagePaths):
 	        image = fa.align(image,gray,rect)
 	        cv2.imwrite(imagePath,image) 
 
+def kill_thread():
+	__thread.kill()
 
-Process(target=__receiveBytes).start()
+__thread = Process(target=__receiveBytes)
+__thread.start()
+
+
+

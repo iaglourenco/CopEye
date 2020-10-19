@@ -1,3 +1,6 @@
+# Generate the embeddings using the functions implemented in functions.py
+
+
 from imutils import paths
 import os
 import argparse

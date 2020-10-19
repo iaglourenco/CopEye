@@ -11,7 +11,6 @@ import os
 import face_recognition
 import dlib
 import argparse
-import keyboard
 
 
 ap = argparse.ArgumentParser()

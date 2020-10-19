@@ -12,14 +12,14 @@ import face_recognition
 import dlib
 import argparse
 import math
+import globalvar
 from functions import *
-
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-d",help="show information about processing",required=False,action="store_true")
 ap.add_argument("-c",help="minimum confidence to find face on the frame",required=False,type=float,default=0.8)
 ap.add_argument("-p",help="minimum confidence to predict a person, matches in dataset",required=False,type=float,default=0.85)
-ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.6)
+ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.48)
 ap.add_argument("--interface",help="show minimal interface while running",required=False,action="store_true",default=False)
 ap.add_argument("--interface2",help="show full interface while running",required=False,action="store_true",default=False)
 ap.add_argument("--android",help="send data to the android app",required=False,action="store_true",default=False)
@@ -101,14 +101,13 @@ vs = VideoStream(src=0,resolution=(1280,720)).start()
 time.sleep(2.0)
 
 
-#Initializing variables
 try:
 	while True:
 		try:
-			if not DATABASE_IS_UPDATED and args['android']:
+			if  globalvar.event.is_set() and args['android']:
 				try:
 					user_data = pickle.loads(open('known/user_embeddings.pickle','rb').read())
-					print('Updating user database')
+					print('Reloading user database...')
 					for e in user_data['embeddings']:
 						user_embeddings.append(e)
 					for n in user_data['names']:
@@ -120,7 +119,8 @@ try:
 				knownEmbeddings = db_embeddings + user_embeddings
 				knownNames = db_names + user_names
 				facePaths = db_facepaths + user_facepaths
-				DATABASE_IS_UPDATED = True
+				globalvar.event.clear()
+				
 
 			frame = vs.read() # Read a frame
 
@@ -132,7 +132,7 @@ try:
 			
 			
 
-			if frameNo %2 == 0:
+			if frameNo % 2 == 0:
 				fps.update()
 				#Extract the blob of image to put in detector
 				
@@ -230,7 +230,7 @@ try:
 
 						
 						if len(detectedInFrame) > 0 and time.process_time() - timeout2Send > 2 and args["android"]:
-							print('Checking...')
+							print('Checking frequency...')
 							timeout2Send=time.process_time()
 							history,timeouts = updateFrequency(detectedInFrame,history,timeouts)
 							detectedInFrame.clear()
@@ -281,6 +281,7 @@ try:
 			
 except KeyboardInterrupt:
 	fps.stop()
+	kill_thread()
 	print("\n[INFO] - elapsed time: {:.2f}".format(fps.elapsed()))
 	print("[INFO] - approx. FPS: {:.2f}".format(fps.fps()))
 	vs.stop()
