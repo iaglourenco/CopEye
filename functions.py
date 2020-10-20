@@ -16,6 +16,13 @@ import face_recognition
 import pickle
 from multiprocessing import Process, Lock
 import globalvar
+import database
+from datatypes import *
+
+
+
+
+
 mutex = Lock()
 
 MINIMAL_OCURRENCE = 5
@@ -35,7 +42,7 @@ BUFFER_SIZE=1024
 IP = "192.168.1.101"
 DEFAULT_PORT=9700
 
-#Filenames of log
+#Filename of log
 LOGNAME_ERR="logerr"
 LOGNAME_INFO = "loginfo"
 DETECTION_LOGNAME = "detectionLog"
@@ -44,6 +51,12 @@ DETECTION_LOGNAME = "detectionLog"
 os.system("rm -f {}".format(LOGNAME_ERR))
 if DEBUG:
 	os.system("rm -f {}".format(LOGNAME_INFO))
+
+
+
+db = database.CopEyeDatabase(r'./sqlite.db')
+db.init_database()
+
 
 def ex_info():
     #Get info about the exception
@@ -256,7 +269,8 @@ def updateFrequency(detected,history,timeouts):
 				print("[ERROR] - Failed to connect to the app")
 				ex_info()			
 	return history,timeouts
-			
+
+
 def update_db_encodings(names,imagePaths):
 	#update the default database of faces
 	try:
@@ -330,6 +344,15 @@ def update_user_encodings(names,imagePaths):
 			'facePaths':facePaths}
 	f.write(pickle.dumps(data))
 	f.close()
+
+
+def sqlite_add_fugitive_db(connection,fugitive,imagePaths):
+	if type(fugitive) is not Fugitivo or type(imagePaths) is not list or connection is not database.sqlite3.Connection:
+		raise TypeError()
+	
+	
+
+
 
 def extract_embeddings_from_image_file(imagePath):
 	#Return the encoding for a imgae file, assume that is one face in the frame

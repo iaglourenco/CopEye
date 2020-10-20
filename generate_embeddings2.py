@@ -5,6 +5,7 @@ from imutils import paths
 import os
 import argparse
 from functions import *
+import database
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--data",help="Path to the dataset",required=True)
