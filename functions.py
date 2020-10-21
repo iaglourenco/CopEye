@@ -8,6 +8,7 @@ import time
 import os
 import cv2
 import traceback
+from cv2 import data
 import imutils
 import numpy as np
 import dlib
@@ -17,8 +18,7 @@ import pickle
 from multiprocessing import Process, Lock
 import globalvar
 import database
-from datatypes import *
-
+from database import Fugitivo,Artigo,Crime,Shot, UserDB
 
 
 
@@ -54,8 +54,11 @@ if DEBUG:
 
 
 
-db = database.CopEyeDatabase(r'./sqlite.db')
-db.init_database()
+defaultdb = database.DefaultDB(database.CopEyeDatabase(r'./default_sqlite.db'))
+userdb = database.UserDB(database.CopEyeDatabase(r'./user_sqlite.db'))
+defaultdb.db.init_default_database()
+userdb.db.init_user_database()
+
 
 
 def ex_info():
@@ -66,7 +69,15 @@ def ex_info():
 	write2Log(exception,LOGNAME_ERR)
 	
 def write2Log(text,logtype,print_terminal=False,supressDateHeader=False,append=True):
-	#write data to the log
+	"""
+	Write data to the log
+	- text: the text to write
+	- logtype: wich logname to write
+	- print_terminal: if True print text to the terminal
+	- supressDateHeader: if True suppress the date header on the log
+	- append: if True append text to the end of log file
+	
+	"""
 	header="\r"
 	if supressDateHeader == False:
 		header = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
@@ -80,7 +91,11 @@ def write2Log(text,logtype,print_terminal=False,supressDateHeader=False,append=T
 		print(text)
 
 def distance2conf(face_distance,tolerance):
-    # Calculate confidence based on the distance and tolerance
+	"""
+	Calculate confidence based on the distance and tolerance
+	- face_distance: the distance calculated
+	- tolerance: the threashold of prediction 
+	"""
 	if face_distance > tolerance:
 		range = (1.0 - tolerance)
 		linear_val = (1.0 - face_distance) / (range * 2.0)
@@ -139,31 +154,35 @@ def sendFrame(detected,name,typeOfSend):
 		raise ValueError
 
 def __sendBytes(data, dataType):
-	#Send the content through socket
-		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)		
-		s.connect((IP, DEFAULT_PORT))	
+	"""
+	Send the data content through socket
+	- dataType: The type of data to send (Text or File)
+	"""
+	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)		
+	s.connect((IP, DEFAULT_PORT))	
+	if dataType == INFO_TYPE:
+		s.send(data.encode())
+	else:
+		filesize = os.path.getsize(data)
+		with open(data, "rb") as f:
+			while(True):
+				# read the bytes from the file
+				bytes_read = f.read(BUFFER_SIZE)
+				if not bytes_read:
+					break
+				s.sendall(bytes_read)
+				
 
-		if dataType == INFO_TYPE:
-			s.send(data.encode())
-
-		else:
-			filesize = os.path.getsize(data)
-			with open(data, "rb") as f:
-				while(True):
-					# read the bytes from the file
-					bytes_read = f.read(BUFFER_SIZE)
-					if not bytes_read:
-						break
-					s.sendall(bytes_read)
-					
-	
-		s.close()	
+	s.close()	
 
 def createDetectedStruct(detected,dataTuple):
-	# Update detected with data provided by dataTuple
- 	# :param detected: a empty dict, or a previously initiated dict
-	# :param dataTuple: a tuple with these fields: (probability,frame,face_crop,faceComparedPath,frameNo)
-	# :return: a updated detected dictionary
+	"""
+	Update detected with data provided by dataTuple
+ 	
+	- detected: a empty dict, or a previously initiated dict
+	- dataTuple: a tuple with these fields: (probability,frame,face_crop,faceComparedPath,frameNo)
+	- return: a updated detected dictionary
+	"""
 	probability =dataTuple[0]
 	name=dataTuple[1]
 	frame=dataTuple[2]
@@ -180,6 +199,10 @@ def createDetectedStruct(detected,dataTuple):
 	return detected
 
 def __receiveBytes():
+	"""
+	[THREAD LOOP]
+	Wait for connetions from the app, and call the update function
+	"""
 	SEPARATOR ='/'
 	s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 	s.bind(('',5001)) # Accept connection from any address
@@ -192,7 +215,7 @@ def __receiveBytes():
 			received = ns.recv(BUFFER_SIZE)
 			print(received)
 			received = received.decode()
-			filesize, crime, periculosity, name = received.split(SEPARATOR)
+			filesize, crime, periculosity, name,age= received.split(SEPARATOR)
 			filename='arquivo'
 
 			try:
@@ -209,7 +232,9 @@ def __receiveBytes():
 					f.write(recvBytes)
 			f.close()
 			try:
-				update_user_encodings([name],['./datasets/{}/{}'.format(name,filename)])
+				imgPath = ['./datasets/{}/{}'.format(name,filename)]
+				update_user_encodings([name],imgPath)
+				sqlite_add_fugitives(userdb,Fugitivo(name,age,periculosity),imgPath)
 				globalvar.event.set()
 	
 			except Exception :
@@ -224,7 +249,9 @@ def __receiveBytes():
 			pass
 
 def __thread_call(detected,n):
-	
+	"""
+	The thread call to send the data to the app in order, uses MUTEX for race condition protection
+	"""
 
 	#Mutex is used to ensure the order of send and to prevent to other thread send first
 	# try to acquire the mutex
@@ -235,8 +262,10 @@ def __thread_call(detected,n):
 		sendFrame(detected,n,IMAGE_TYPE_DATASET_SAMPLE)
 
 def updateFrequency(detected,history,timeouts):	
-	#Recebe o dict com as pessoas detectadas, historico atual e os timeouts verifica se esta na hora de enviar dados ou não
-	#retorna o historico e os timeouts atualizados
+	"""
+	Recebe o dict com as pessoas detectadas, historico atual e os timeouts verifica se esta na hora de enviar dados ou não
+	retorna o historico e os timeouts atualizados
+	"""
 	for n in detected:
 		history[n] = history.get(n,0)+1		
 		timeouts[n]=timeouts.get(n,0)
@@ -272,7 +301,12 @@ def updateFrequency(detected,history,timeouts):
 
 
 def update_db_encodings(names,imagePaths):
-	#update the default database of faces
+	"""
+	[DEPRECATED]
+	Update the default pickle file with the extracted encoding, and the names
+	- names: list of names in the same order as imagePaths
+	- imagePaths: list of paths of face images
+	"""
 	try:
 		knownEmbeddings = []
 		knownNames=[]
@@ -310,7 +344,12 @@ def update_db_encodings(names,imagePaths):
 	f.close()
 
 def update_user_encodings(names,imagePaths):
-	#update the user database of faces
+	"""
+	[DEPRECATED]
+	Update the user pickle file with the extracted encoding, and the names
+	- names: list of names in the same order as imagePaths
+	- imagePaths: list of paths of face images
+	"""
 	try:
 		knownEmbeddings = []
 		knownNames=[]
@@ -346,23 +385,48 @@ def update_user_encodings(names,imagePaths):
 	f.close()
 
 
-def sqlite_add_fugitive_db(connection,fugitive,imagePaths):
-	if type(fugitive) is not Fugitivo or type(imagePaths) is not list or connection is not database.sqlite3.Connection:
-		raise TypeError()
-	
-	
+def sqlite_add_fugitives(data,fugitive: Fugitivo,imagePaths:list,artigo= -1):
+	""" Add a fugitive to SQLite database
+	 - ddb: SQLite database ( UserDB or DefaultDB)
+	 - fugitive: Fugitive class
+	 - imagePaths: list of images of fugitive
+	 - artigo: ( Only for DefaultDB) Law article of the crime of the suspect 
 
+	"""
+	db = data.db
+	for imagePath in imagePaths:
+		
+		encoding = extract_embeddings_from_image_file(imagePath)
+		if encoding is None:
+			print('NULL encoding found',fugitive.nome)
+			continue
+		search = db.select('*','fugitivos','nome="{}" and idade="{}" and nivel_perigo="{}"'.format(fugitive.nome,fugitive.idade,fugitive.nivel_perigo))
+		fugitive_id=0
+		if len(search) != 0: # Possible duplicate in BD appending image and crime to first one
+				fugitive_id = search[0][0]
+		else:
+			fugitive_id = db.insert_fugitivo(fugitive)
+			
+		db.insert_image(Shot(int(fugitive_id),imagePath,encoding))
+		
+		if type(data) is database.DefaultDB:
+			if artigo != -1:
+				db.insert_crime(Crime(fugitive_id,artigo))
 
-
-def extract_embeddings_from_image_file(imagePath):
-	#Return the encoding for a imgae file, assume that is one face in the frame
+def extract_embeddings_from_image_file(imagePath: str):
+	"""
+	Extract the encoding of the image file in imagePath, 
+	assuming that is one face in the frame
+	- imagePath: the path to the image file
+	"""
 
 	#Load the face detector
 	detector = cv2.dnn.readNetFromCaffe('models/face_detection_model/deploy.prototxt',
             'models/face_detection_model/res10_300x300_ssd_iter_140000.caffemodel')	
 	
 	image = cv2.imread(imagePath)
-	
+	if image is None:
+		return image
 	#Resize the image to put in the detector
 	image = imutils.resize(image,width=600)
 	(h,w) = image.shape[:2]
@@ -399,9 +463,10 @@ def extract_embeddings_from_image_file(imagePath):
 		return None
 
 def __extract_encoding(frame):
-
-	#Return a encoding for the frame, assuming that is one face in the frame
-
+	""" Extract the encoding of a np.ndarray photo,
+		assuming that is one face in the frame
+	- frame: a numpy.ndarray containing the photo
+	"""
 	rgb = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
 	encodings=[]
 	locations = face_recognition.face_locations(rgb,model="hog")
@@ -414,9 +479,13 @@ def __extract_encoding(frame):
 
 	return emb
 
-def align_faces(imagePaths):
-	#Align faces found in imagePaths, overwrite original with the aligned face
+def align_faces(imagePaths: list):
+	"""
+	Align faces found in imagePaths, 
+	overwrite original with the aligned face
+    - imagePaths: list of paths of images to align
 
+	"""
 	detector = dlib.get_frontal_face_detector()
 	predictor = dlib.shape_predictor("models/shape_predictor_68_face_landmarks.dat")
 	fa = FaceAligner(predictor,desiredFaceHeight=256)
@@ -433,10 +502,14 @@ def align_faces(imagePaths):
 	        cv2.imwrite(imagePath,image) 
 
 def kill_thread():
+	"""Kills the receive thread"""
 	__thread.kill()
 
+
 __thread = Process(target=__receiveBytes)
-__thread.start()
+
+def thread_listen():
+	__thread.start()
 
 
 
