@@ -24,6 +24,7 @@ ap.add_argument("--interface",help="show minimal interface while running",requir
 ap.add_argument("--interface2",help="show full interface while running",required=False,action="store_true",default=False)
 ap.add_argument("--android",help="send data to the android app",required=False,action="store_true",default=False)
 ap.add_argument("--log",help="save detections log to the disk, a echo to a file of the option '-d'",required=False,action="store_true",default=False)
+ap.add_argument("--sql",help="use SQLite database",required=False,action="store_true",default=False)
 
 
 args = vars(ap.parse_args())
@@ -100,11 +101,11 @@ if args["android"]:
 vs = VideoStream(src=0,resolution=(1280,720)).start()
 time.sleep(2.0)
 
-
+globalvar.event.set()
 try:
 	while True:
 		try:
-			if  globalvar.event.is_set() and args['android']:
+			if  globalvar.event.is_set():
 				try:
 					user_data = pickle.loads(open('known/user_embeddings.pickle','rb').read())
 					print('Reloading user database...')
@@ -152,10 +153,10 @@ try:
 						(startX, startY, endX, endY) = box.astype("int")# Get the coordinates to cut the face from the frame
 						
 						face = frame[startY:endY, startX:endX] #Extract the face from the frame
-						(fH, fW) = face.shape[:2]# Get the face height and weight			
+						(fH, fW) = face.shape[:2] # Get the face height and weight			
 						if fW > 255 or fH > 340 or fW < 20 or fH < 20:
 							continue
-						
+						 
 						
 						# # Face alignment
 						# al = np.copy(frame)
@@ -172,7 +173,7 @@ try:
 						encodings=[]
 						#locations = face_recognition.face_locations(rgb,model="hog")
 						encodings = face_recognition.face_encodings(rgb,[(startY,endX,endY,startX)],num_jitters=2,model="large")
-						#encodings = face_recognition.face_encodings(rgb,[(0,255,255,0)],num_jitters=1,model="large")
+						#encodings = face_recognition.face_encodings(rgb,locations,num_jitters=1,model="large")
 						for enc in encodings:
 							frameEmb=enc
 
@@ -195,6 +196,7 @@ try:
 							faceDistances[i] = faceDistances.get(i,max(distances))
 							if d < faceDistances[i]: 
 								faceDistances[i]=d
+						
 						ind = min(faceDistances,key=faceDistances.get) # Get the name with minimum distance
 						distance = faceDistances.get(ind)
 						

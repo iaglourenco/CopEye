@@ -4,10 +4,13 @@ import io
 import numpy as np
 
 class Fugitivo:
-    def __init__(self,nome: str,idade: int,nivel_perigo: str):
+    def __init__(self,nome: str,idade: int,nivel_perigo: str,id=-1, crime = -1):
     	self.nome = nome
     	self.idade = idade
     	self.nivel_perigo = nivel_perigo
+        self.crime = crime
+
+
 
 class Crime:    
     def __init__(self,id: str,artigo: int):
@@ -116,18 +119,12 @@ class CopEyeDatabase:
         else:
             print("Can't create database connection")
     
-    def init_default_database(self):
+    def init_database(self):
         """Create all tables of DefaultDB"""
         self.run_query(self.__query_create_table_fugitivos)
         self.run_query(self.__query_create_table_artigos)
         self.run_query(self.__query_create_table_imagens)
         self.run_query(self.__query_create_table_crimes)
-    
-    
-    def init_user_database(self):
-        """Create all tables of UserDB"""
-        self.run_query(self.__query_create_table_fugitivos)
-        self.run_query(self.__query_create_table_imagens)
     
     # Inserts
     def insert_fugitivo(self,fugitivo: Fugitivo):
@@ -197,13 +194,3 @@ class CopEyeDatabase:
 
 
 
-
-
-class UserDB:
-    def __init__(self,db:CopEyeDatabase):
-        self.db = db
-
-
-class DefaultDB:
-    def __init__(self,db:CopEyeDatabase):
-        self.db = db

@@ -54,10 +54,11 @@ if DEBUG:
 
 
 
-defaultdb = database.DefaultDB(database.CopEyeDatabase(r'./default_sqlite.db'))
-userdb = database.UserDB(database.CopEyeDatabase(r'./user_sqlite.db'))
-defaultdb.db.init_default_database()
-userdb.db.init_user_database()
+defaultdb = database.CopEyeDatabase(r'./default_db.sqlite')
+userdb = database.CopEyeDatabase(r'./user_db.sqlite')
+defaultdb.init_database()
+userdb.init_database()
+
 
 
 
@@ -299,7 +300,6 @@ def updateFrequency(detected,history,timeouts):
 				ex_info()			
 	return history,timeouts
 
-
 def update_db_encodings(names,imagePaths):
 	"""
 	[DEPRECATED]
@@ -384,8 +384,7 @@ def update_user_encodings(names,imagePaths):
 	f.write(pickle.dumps(data))
 	f.close()
 
-
-def sqlite_add_fugitives(data,fugitive: Fugitivo,imagePaths:list,artigo= -1):
+def sqlite_add_fugitives(db,fugitive: Fugitivo,imagePaths:list,artigo= -1):
 	""" Add a fugitive to SQLite database
 	 - ddb: SQLite database ( UserDB or DefaultDB)
 	 - fugitive: Fugitive class
@@ -393,7 +392,6 @@ def sqlite_add_fugitives(data,fugitive: Fugitivo,imagePaths:list,artigo= -1):
 	 - artigo: ( Only for DefaultDB) Law article of the crime of the suspect 
 
 	"""
-	db = data.db
 	for imagePath in imagePaths:
 		
 		encoding = extract_embeddings_from_image_file(imagePath)
@@ -409,9 +407,7 @@ def sqlite_add_fugitives(data,fugitive: Fugitivo,imagePaths:list,artigo= -1):
 			
 		db.insert_image(Shot(int(fugitive_id),imagePath,encoding))
 		
-		if type(data) is database.DefaultDB:
-			if artigo != -1:
-				db.insert_crime(Crime(fugitive_id,artigo))
+		db.insert_crime(Crime(fugitive_id,artigo))
 
 def extract_embeddings_from_image_file(imagePath: str):
 	"""
@@ -503,7 +499,47 @@ def align_faces(imagePaths: list):
 
 def kill_thread():
 	"""Kills the receive thread"""
-	__thread.kill()
+	if(__thread.is_alive()):
+		__thread.kill()
+
+def load_sqlite_db(db: database.CopEyeDatabase,data):
+	"""Load the sqlite database and create the structure to use in detection"""
+	dataset={}
+	shots=[]
+	crimes=[]
+
+
+	#Load all articles from the database
+	articles= db.select_all('articles')
+	
+
+	#Load all fugitives and create the structure
+	db_fugitives = db.select_all('fugitives')
+	for fugitive in db_fugitives:
+		ident = fugitive[0]
+		nome = fugitive[1]
+		idade = fugitive[2]
+		periculosidade = fugitive[3]
+		
+		#Select the images associated with the fugitive
+		db_images = db.select('*','imagens','id={}'.format(ident))
+		for image in db_images:
+			uri = image[1]
+			encoding = image[2]
+			shots.append(database.Shot(ident, uri, encoding))	
+
+		#Select the crimes associated with the fugitive
+		db_crimes = db.select('*','crimes','id={}'.format(ident))
+		for crime in db_crimes:
+			artigo = crime[1]
+			crimes.append(database.Crime(ident, artigo))
+
+		#Add a item to the dict containing = Fugitive: ( listof(images) , listof(crimes) )
+		dataset[database.Fugitivo(nome,idade,periculosidade,ident)]=(shots,crimes)
+
+
+	#Return the dictionary and the list of articles
+	return dataset,articles
 
 
 __thread = Process(target=__receiveBytes)

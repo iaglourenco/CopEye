@@ -27,7 +27,7 @@ try:
     #For each image path load the image and extract the face embedding
     for (i,imagePath) in enumerate(imagePaths):   
         n = imagePath.split(os.path.sep)[-2]
-        # names.append(imagePath.split(os.path.sep)[-2])        
+        names.append(imagePath.split(os.path.sep)[-2])        
         
         sqlite_add_fugitives(defaultdb,database.Fugitivo(n,random.randint(20,40),random.choice(perigo)),[imagePath],artigo=157)
 
