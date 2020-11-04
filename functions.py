@@ -8,7 +8,6 @@ import time
 import os
 import cv2
 import traceback
-from cv2 import data
 import imutils
 import numpy as np
 import dlib
@@ -18,7 +17,7 @@ import pickle
 from multiprocessing import Process, Lock
 import globalvar
 import database
-from database import Fugitivo,Artigo,Crime,Shot, UserDB
+from database import Fugitivo,Artigo,Crime,Shot
 
 
 
@@ -502,7 +501,7 @@ def kill_thread():
 	if(__thread.is_alive()):
 		__thread.kill()
 
-def load_sqlite_db(db: database.CopEyeDatabase,data):
+def load_sqlite_db(db: database.CopEyeDatabase):
 	"""Load the sqlite database and create the structure to use in detection"""
 	dataset={}
 	shots=[]
@@ -510,11 +509,11 @@ def load_sqlite_db(db: database.CopEyeDatabase,data):
 
 
 	#Load all articles from the database
-	articles= db.select_all('articles')
+	articles= db.select_all('artigos')
 	
 
 	#Load all fugitives and create the structure
-	db_fugitives = db.select_all('fugitives')
+	db_fugitives = db.select_all('fugitivos')
 	for fugitive in db_fugitives:
 		ident = fugitive[0]
 		nome = fugitive[1]
@@ -535,11 +534,15 @@ def load_sqlite_db(db: database.CopEyeDatabase,data):
 			crimes.append(database.Crime(ident, artigo))
 
 		#Add a item to the dict containing = Fugitive: ( listof(images) , listof(crimes) )
-		dataset[database.Fugitivo(nome,idade,periculosidade,ident)]=(shots,crimes)
+		print(len(shots))
+		dataset[ident]=(database.Fugitivo(nome,idade,periculosidade,ident),shots,crimes)
+		shots=[]
+		crimes=[]
 
 
 	#Return the dictionary and the list of articles
 	return dataset,articles
+
 
 
 __thread = Process(target=__receiveBytes)

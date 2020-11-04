@@ -19,7 +19,8 @@ imagePaths = list(paths.list_images(args.get("data")))
 print("[INFO] - {} images loaded".format(len(imagePaths)))
 names = []
 n ="nome"
-perigo = ['Alto','Medio','Baixo']
+last_n = ''
+perigos = ['Alto','Medio','Baixo']
 
 
 try:
@@ -29,7 +30,13 @@ try:
         n = imagePath.split(os.path.sep)[-2]
         names.append(imagePath.split(os.path.sep)[-2])        
         
-        sqlite_add_fugitives(defaultdb,database.Fugitivo(n,random.randint(20,40),random.choice(perigo)),[imagePath],artigo=157)
+
+        if not n == last_n:
+            last_n = n
+            age = random.randint(20,40)
+            perigo = random.choice(perigos)
+
+        sqlite_add_fugitives(defaultdb,database.Fugitivo(n,age,perigo),[imagePath],artigo=157)
 
     # update_db_encodings(names,imagePaths)
 

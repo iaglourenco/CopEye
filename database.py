@@ -3,14 +3,12 @@ import sqlite3
 import io
 import numpy as np
 
+
 class Fugitivo:
-    def __init__(self,nome: str,idade: int,nivel_perigo: str,id=-1, crime = -1):
-    	self.nome = nome
-    	self.idade = idade
-    	self.nivel_perigo = nivel_perigo
-        self.crime = crime
-
-
+    def __init__(self,nome: str,idade: int,nivel_perigo: str,id=-1):
+        self.nome = nome
+        self.idade = idade
+        self.nivel_perigo = nivel_perigo
 
 class Crime:    
     def __init__(self,id: str,artigo: int):
@@ -28,8 +26,6 @@ class Shot:
         self.id = id
         self.uri = uri
         self.encoding = encoding
-
-
 
 class CopEyeDatabase:
 

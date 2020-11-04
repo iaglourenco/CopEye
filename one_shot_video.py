@@ -74,6 +74,18 @@ detectedInFrame={}
 print("[INFO] - Loading known embeddings")
 db_data = pickle.loads(open("known/db_embeddings.pickle","rb").read()) 
 
+
+
+
+
+sql_data,articles = load_sqlite_db(defaultdb)
+for i in sql_data:
+	f,imgs,crimes = sql_data.get(i,[])
+	for i in imgs:
+		db_embeddings.append(i.encoding)
+		db_names.append(f.nome)
+		db_facepaths.append(i.uri)
+
 #Loading to variables
 for e in db_data["embeddings"]:
 	db_embeddings.append(e)
@@ -113,12 +125,24 @@ if args["android"]:
 	print("[INFO] - ANDROID MODE - Sending data to {}:{}\n".format(IP,DEFAULT_PORT))
 	os.system("rm -f log/*")
 
-
+globalvar.event.set()
 try:
 	while vc.isOpened():
 		try:
-			if not DATABASE_IS_UPDATED and args['android']:
+			if globalvar.event.is_set():
 				print('Updating user database')
+				user_embeddings=[]
+				user_names=[]
+				user_facepaths=[]
+
+				sql_data,articles = load_sqlite_db(userdb)
+				for i in sql_data:
+					f,imgs,crimes = sql_data.get(i,[])
+					for i in imgs:
+						user_embeddings.append(i.encoding)
+						user_names.append(f.nome)
+						user_facepaths.append(i.uri)
+
 				user_data = pickle.loads(open('known/user_embeddings.pickle','rb').read())
 				for e in user_data['embeddings']:
 					user_embeddings.append(e)
@@ -126,10 +150,11 @@ try:
 					user_names.append(n)
 				for fp in user_data['facePaths']:
 					user_facepaths.append(fp)
+
 				knownEmbeddings = db_embeddings + user_embeddings
 				knownNames = db_names + user_names
 				facePaths = db_facepaths + user_facepaths
-				DATABASE_IS_UPDATED = True
+				globalvar.event.clear()
 
 
 			ret,frame = vc.read()# Read a frame
