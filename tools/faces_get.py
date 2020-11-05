@@ -26,15 +26,6 @@ ap.add_argument("-a","--amount",help="amount of images to take",default=100,type
 ap.add_argument("-t","--time",help="delay between shots",type=float,default=0.5)
 args = vars(ap.parse_args())
 
-options = dlib.shape_predictor_training_options()
-options.tree_depth=2
-options.nu=0.25
-options.cascade_depth=12
-options.feature_pool_size = 500
-options.num_test_splits = 20
-options.oversampling_amount = 20
-options.oversampling_translation_jitter=0
-
 detectorAlign = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor("../one_shot/models/shape_predictor_5_face_landmarks.dat")
 fa = FaceAligner(predictor,desiredFaceHeight=256)

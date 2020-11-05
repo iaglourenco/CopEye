@@ -26,15 +26,6 @@ detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor("../one_shot/models/shape_predictor_68_face_landmarks.dat")
 fa = FaceAligner(predictor,desiredFaceHeight=256)
 
-options = dlib.shape_predictor_training_options()
-options.tree_depth=2
-options.nu=0.25
-options.cascade_depth=12
-options.feature_pool_size = 500
-options.num_test_splits = 20
-options.oversampling_amount = 20
-options.oversampling_translation_jitter=0
-
 for i,imagePath in enumerate(imagePaths):
     print("[INFO] - Aligning face #{}".format(i))
     image = cv2.imread(imagePath)

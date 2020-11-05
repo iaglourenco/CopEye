@@ -1,8 +1,5 @@
 .vscode/
 
-
-Discontinued/
-
 datasets/kaggle_dataset_full/
 
 log/*
@@ -12,3 +9,11 @@ models/nn4.v1.t7
 models/nn4.v2.t7
 
 models/openface_nn4.small2.v1.t7
+
+__pycache__
+
+logerr
+
+loginfo
+
+detectionLog

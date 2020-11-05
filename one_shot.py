@@ -12,32 +12,31 @@ import face_recognition
 import dlib
 import argparse
 import math
+import globalvar
 from functions import *
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-d",help="show information about processing",required=False,action="store_true")
 ap.add_argument("-c",help="minimum confidence to find face on the frame",required=False,type=float,default=0.8)
 ap.add_argument("-p",help="minimum confidence to predict a person, matches in dataset",required=False,type=float,default=0.85)
-ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.7)
-ap.add_argument("--opencv",help="use opencv model to extract embeddings",required=False,action="store_true")
+ap.add_argument("-t",help="tolerance of distance",required=False,type=float,default=0.48)
 ap.add_argument("--interface",help="show minimal interface while running",required=False,action="store_true",default=False)
 ap.add_argument("--interface2",help="show full interface while running",required=False,action="store_true",default=False)
 ap.add_argument("--android",help="send data to the android app",required=False,action="store_true",default=False)
 ap.add_argument("--log",help="save detections log to the disk, a echo to a file of the option '-d'",required=False,action="store_true",default=False)
+ap.add_argument("--sql",help="use SQLite database",required=False,action="store_true",default=False)
 
 
 args = vars(ap.parse_args())
 
+if args["log"]:
+	write2Log("#Frame no. - Best Match <-> Predicted = Distance : Probability - No. of matches",DETECTION_LOGNAME,supressDateHeader=True,append=False)
 
-if args["opencv"]:	
-	#Use openCV model
-    opencv=True
-    print("[INFO] - Loading OpenCV embedding model")
-    emb = cv2.dnn.readNetFromTorch("models/nn4.small1.v1.t7")
-else:
-	#Use dlib model
-    print("[INFO] - Using DLIB embedding model")
-    opencv = False
+
+
+#Use dlib model
+print("[INFO] - Using DLIB embedding model")
+opencv = False
 
 #Face detector, return the position of the faces in the image
 print("[INFO] - Loading face detector")
@@ -48,8 +47,11 @@ sp = dlib.shape_predictor("models/shape_predictor_68_face_landmarks.dat")
 fa = FaceAligner(sp)
 
 # Dataset with the embbedings knowned, frames will be compared with each face here
-print("[INFO] - Loading known embeddings")
-data = pickle.loads(open("known/embeddings.pickle","rb").read()) 
+
+db_embeddings=[]
+db_names=[]
+db_facepaths=[]
+
 knownEmbeddings = []
 knownNames = []
 facePaths = []
@@ -63,18 +65,23 @@ timeouts={}
 history={}
 detectedInFrame={}
 
+print("[INFO] - Loading known embeddings")
+
+
+# db_data = pickle.loads(open("known/db_embeddings.pickle","rb").read()) 
 #Loading to variables
-for e in data["embeddings"]:
-	knownEmbeddings.append(e)
+# for e in db_data["embeddings"]:
+# 	db_embeddings.append(e)
 
-for n in data["names"]:
-	knownNames.append(n)
+# for n in db_data["names"]:
+# 	db_names.append(n)
 
-#facePaths for each person in the database
-for fp in data["facePaths"]:
-	facePaths.append(fp)
+# #facePaths for each person in the database
+# for fp in db_data["facePaths"]:
+# 	db_facepaths.append(fp)
 
 
+sql_data,articles = load_sqlite_db(defaultdb)
 
 
 fps = FPS().start()
@@ -94,12 +101,40 @@ if args["android"]:
 vs = VideoStream(src=0,resolution=(1280,720)).start()
 time.sleep(2.0)
 
-
-#Initializing variables
-
+globalvar.event.set()
 try:
 	while True:
 		try:
+			if  globalvar.event.is_set():
+				try:
+					print("Entrei e atualizei")
+					db_embeddings=[]
+					db_names=[]
+					db_facepaths=[]
+					
+					sql_data,articles = load_sqlite_db(defaultdb)
+					for fid in sql_data:
+						f,imgs,crimes = sql_data.get(fid,[])
+						for i in imgs:
+							db_embeddings.append(i.encoding)
+							db_names.append(fid)
+							db_facepaths.append(i.uri)
+
+					# user_data = pickle.loads(open('known/user_embeddings.pickle','rb').read())
+					# print('Reloading user database...')
+					# for e in user_data['embeddings']:
+					# 	user_embeddings.append(e)
+					# for n in user_data['names']:
+					# 	user_names.append(n)
+					# for fp in user_data['facePaths']:
+					# 	user_facepaths.append(fp)
+				except FileNotFoundError:
+					pass
+				knownEmbeddings = db_embeddings
+				knownNames = db_names
+				facePaths = db_facepaths
+				globalvar.event.clear()
+				
 
 			frame = vs.read() # Read a frame
 
@@ -110,55 +145,56 @@ try:
 			frameOut =  np.copy(frame)
 			
 			
-			fps.update()
 
-			if frameNo %2 == 0:
+			if frameNo % 2 == 0:
+				fps.update()
 				#Extract the blob of image to put in detector
+				
 				imageBlob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 1.0, (300, 300),(104.0, 177.0, 123.0), swapRB=False, crop=False)
 				detector.setInput(imageBlob) # Realize detection
 				detections = detector.forward()
-
+				
 				for f in range(0, detections.shape[2]):# For each face detected
 					name="Unknown"
-					
+				
 					confidence = detections[0, 0, f, 2]#Extract the confidence returned by the detector
-					
-					if confidence >= 0.9: #Compare with the confidence passed by argument
+				
+					if confidence >= args['c']: #Compare with the confidence passed by argument
 						noDetected+=1 #Faces detected in the frame counter
+						
 						box = detections[0, 0, f, 3:7] * np.array([w, h, w, h])# Convert the positions to a np.array
 						(startX, startY, endX, endY) = box.astype("int")# Get the coordinates to cut the face from the frame
 						
-						# boxFace = frame[startY:endY, startX:endX] #Extract the face from the frame
-						# (fH, fW) = boxFace.shape[:2]# Get the face height and weight			
-						# if fW > 250 or fH > 340 or fW < 20 or fH < 20:
-						# 	continue
+						face = frame[startY:endY, startX:endX] #Extract the face from the frame
+						(fH, fW) = face.shape[:2] # Get the face height and weight			
+						if fW > 255 or fH > 340 or fW < 20 or fH < 20:
+							continue
+						 
 						
-						
-						#Face alignment
-						al = np.copy(frame)
-						gray=cv2.cvtColor(al,cv2.COLOR_BGR2GRAY)
-						face = fa.align(al,
-						gray,
-						dlib.rectangle(startX,startY,endX,endY))
+						# # Face alignment
+						# al = np.copy(frame)
+						# gray=cv2.cvtColor(al,cv2.COLOR_BGR2GRAY)
+						# face = fa.align(al,
+						# gray,
+						# dlib.rectangle(startX,startY,endX,endY))
 
 						if noDetected > 0 and args['interface2']:
-							cv2.imshow("Face#{}".format(f),face)
+							cv2.imshow("Face#{}".format(f),imutils.resize(face,width=256,height=256))
 
 						frameEmb = np.empty(128,)
-						if opencv:#Using openCV to extract the frame embeddings
-							faceBlob = cv2.dnn.blobFromImage(face, 1.0 / 255,(96, 96), (0, 0, 0), swapRB=True, crop=False)
-							emb.setInput(faceBlob)
-							frameEmb = emb.forward()		
-							frameEmb = frameEmb.flatten()
-						else:#Using dlib to extract the embeddings
-							rgb = cv2.cvtColor(face,cv2.COLOR_BGR2RGB)
-							locations = face_recognition.face_locations(rgb,model="cnn")
-							encodings = face_recognition.face_encodings(rgb,locations,num_jitters=2,model="large")
-							for enc in encodings:
-								frameEmb=enc
+						rgb = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+						encodings=[]
+						#locations = face_recognition.face_locations(rgb,model="hog")
+						encodings = face_recognition.face_encodings(rgb,[(startY,endX,endY,startX)],num_jitters=2,model="large")
+						#encodings = face_recognition.face_encodings(rgb,locations,num_jitters=1,model="large")
+						for enc in encodings:
+							frameEmb=enc
+
+
 						#Compare the face embedding of te frame with all faces registered on the dataset
 						distances=np.empty(len(knownEmbeddings),)
 						distances = face_recognition.face_distance(knownEmbeddings,frameEmb)
+
 						faceDistances={}
 						matchCount={}
 						matchInfo={}
@@ -173,6 +209,7 @@ try:
 							faceDistances[i] = faceDistances.get(i,max(distances))
 							if d < faceDistances[i]: 
 								faceDistances[i]=d
+						
 						ind = min(faceDistances,key=faceDistances.get) # Get the name with minimum distance
 						distance = faceDistances.get(ind)
 						
@@ -182,10 +219,11 @@ try:
 							matchDis = matchInfo.get(matchName+"distance")
 							nOfMatches = (matchCount.get(matchName))
 							if nOfMatches > 2:
+								distance -= distance/2
 								ind = matchInd
 								name = knownNames[ind]
 						else:
-							distance += distance/2
+							distance += distance/3
 								
 						probability = distance2conf(distance,args["t"])
 						name = knownNames[ind]				
@@ -193,8 +231,9 @@ try:
 
 						if probability >= args["p"] : 
 							text = "#{}-{} : {:.2f}%".format(f,name, probability*100)
+							
 							if args['android']:
-								detectedInFrame = createDetectedStruct(detectedInFrame,(probability,name,frameOut,face,faceComparedPath,frameNo))
+								detectedInFrame = createDetectedStruct(detectedInFrame,(probability,name,frameOut,face,faceComparedPath,frameNo,sql_data.get(name,() )))
 
 						else:
 							name="Unknown"
@@ -205,10 +244,10 @@ try:
 						cv2.putText(frameOut, text, (startX, y),cv2.FONT_ITALIC,.45, (0, 255, 255), 2)
 				
 
-
-						if len(detectedInFrame) > 0 and time.clock() - timeout2Send > 2 and args["android"]:
-							print('Checking...')
-							timeout2Send=time.clock()
+						
+						if len(detectedInFrame) > 0 and time.process_time() - timeout2Send > 2 and args["android"]:
+							print('Checking frequency...')
+							timeout2Send=time.process_time()
 							history,timeouts = updateFrequency(detectedInFrame,history,timeouts)
 							detectedInFrame.clear()
 
@@ -220,7 +259,7 @@ try:
 								cv2.imshow("Face#{} Best match".format(f),faceCompared)
 
 						if args["d"]:
-								print("\nFace#{}\nLooks like = {}\nPredicted = {}\nDistance = {}\nProbability = {:.2f}%\nMatch count = {}\n".format(f,knownNames[ind],name,distance,probability*100,matchCount.get(name,-1)))
+								print("\nFace#{}\nLooks like = {}\nPredicted = {}\nDistance = {}\nProbability = {:.2f}%\nMatch count = {}\n".format(f,knownNames[ind],name,distance,probability*100,matchCount.get(name,'NULL')))
 						
 						if args['log']:
 							detectionLog = "#{} - {} <-> {} = {} : {:.2f}% - {} match(s)".format(frameNo,knownNames[ind],name,distance,probability*100,matchCount.get(name,"NULL"))
@@ -258,6 +297,7 @@ try:
 			
 except KeyboardInterrupt:
 	fps.stop()
+	kill_thread()
 	print("\n[INFO] - elapsed time: {:.2f}".format(fps.elapsed()))
 	print("[INFO] - approx. FPS: {:.2f}".format(fps.fps()))
 	vs.stop()
