@@ -54,9 +54,9 @@ if DEBUG:
 
 
 defaultdb = database.CopEyeDatabase(r'./default_db.sqlite')
-userdb = database.CopEyeDatabase(r'./user_db.sqlite')
+# userdb = database.CopEyeDatabase(r'./user_db.sqlite')
 defaultdb.init_database()
-userdb.init_database()
+# userdb.init_database()
 
 
 
@@ -105,16 +105,19 @@ def distance2conf(face_distance,tolerance):
 		linear_val = 1.0 - (face_distance / (range * 2.0))
 		return linear_val + ((1.0 - linear_val) * math.pow((linear_val - 0.5) *2,0.2))
 
-def sendFrame(detected,name,typeOfSend):
+def sendFrame(detected,fid,typeOfSend):
 	#Convert and prepare and send data through socket
 
-	toSend = detected.get(name)
-	
+	toSend = detected.get(fid)
+	name = fid.split(';')[0]
+
+
 	probability = toSend[0]
 	frame = toSend[1]
 	face_crop = toSend[2]
 	faceComparedPath = toSend[3]
 	frameN = toSend[4]
+	fugitive_info,fugitive_imgs,fugitive_crimes = toSend[5]
 
 	now = datetime.now()
 	tempo = now.strftime("%d-%m-%Y %H:%M:%S")
@@ -146,7 +149,15 @@ def sendFrame(detected,name,typeOfSend):
 		__sendBytes(faceComparedPath,typeOfSend)
 	
 	elif typeOfSend == INFO_TYPE:
-		msg = " " + name + "\n" + " "+ tempo + "\n" +" "+str(round(probability*100,2))+"%" + "\n"+ "\0"
+		
+		crimes_list = ""
+		for c in fugitive_crimes:
+			crimes_list += ";"+str(c.artigo);
+
+		# crimes_list = crime1;crime2;crime3;crimeN
+
+		msg =name + "\n" + str(fugitive_info.idade)+ "\n"+ fugitive_info.nivel_perigo+ "\n" + crimes_list+ "\n" + tempo + "\n" + str(round(probability*100,2))+"%" + "\n" + "\0"
+		
 		msg = msg.ljust(1024,"0")
 		__sendBytes(msg, typeOfSend)
 
@@ -180,21 +191,22 @@ def createDetectedStruct(detected,dataTuple):
 	Update detected with data provided by dataTuple
  	
 	- detected: a empty dict, or a previously initiated dict
-	- dataTuple: a tuple with these fields: (probability,frame,face_crop,faceComparedPath,frameNo)
+	- dataTuple: a tuple with these fields: (probability,fugitive_id,frame,face_crop,faceComparedPath,frameNo,fugitive_info)
 	- return: a updated detected dictionary
 	"""
 	probability =dataTuple[0]
-	name=dataTuple[1]
+	fid=dataTuple[1] # fid consist of name+id
 	frame=dataTuple[2]
 	face_crop=dataTuple[3]
 	faceComparedPath=dataTuple[4]
 	frameNo=dataTuple[5]
+	fugitive_info = dataTuple[6] # crimes, images, and info about the fugitive
 
-	p = detected.get(name)
+	p = detected.get(fid)
 	if p == None:
-		detected[name]=(probability,frame,face_crop,faceComparedPath,frameNo)
+		detected[fid]=(probability,frame,face_crop,faceComparedPath,frameNo,fugitive_info)
 	elif p[0] < probability:
-		detected[name]=(probability,frame,face_crop,faceComparedPath,frameNo)
+		detected[fid]=(probability,frame,face_crop,faceComparedPath,frameNo,fugitive_info)
 
 	return detected
 
@@ -215,7 +227,7 @@ def __receiveBytes():
 			received = ns.recv(BUFFER_SIZE)
 			print(received)
 			received = received.decode()
-			filesize, crime, periculosity, name,age= received.split(SEPARATOR)
+			filesize, crimes, periculosity, name,age= received.split(SEPARATOR)
 			filename='arquivo'
 
 			try:
@@ -234,7 +246,7 @@ def __receiveBytes():
 			try:
 				imgPath = ['./datasets/{}/{}'.format(name,filename)]
 				update_user_encodings([name],imgPath)
-				sqlite_add_fugitives(userdb,Fugitivo(name,age,periculosity),imgPath)
+				sqlite_add_fugitives(userdb,Fugitivo(name,age,periculosity),imgPath,crimes.split(';'))
 				globalvar.event.set()
 	
 			except Exception :
@@ -383,12 +395,12 @@ def update_user_encodings(names,imagePaths):
 	f.write(pickle.dumps(data))
 	f.close()
 
-def sqlite_add_fugitives(db,fugitive: Fugitivo,imagePaths:list,artigo= -1):
+def sqlite_add_fugitives(db,fugitive: Fugitivo,imagePaths:list,artigos):
 	""" Add a fugitive to SQLite database
-	 - ddb: SQLite database ( UserDB or DefaultDB)
+	 - ddb: SQLite database 
 	 - fugitive: Fugitive class
 	 - imagePaths: list of images of fugitive
-	 - artigo: ( Only for DefaultDB) Law article of the crime of the suspect 
+	 - artigo: List of law articles of the crimes of the suspect 
 
 	"""
 	for imagePath in imagePaths:
@@ -406,7 +418,8 @@ def sqlite_add_fugitives(db,fugitive: Fugitivo,imagePaths:list,artigo= -1):
 			
 		db.insert_image(Shot(int(fugitive_id),imagePath,encoding))
 		
-		db.insert_crime(Crime(fugitive_id,artigo))
+		for artigo in artigos:
+			db.insert_crime(Crime(fugitive_id,artigo))
 
 def extract_embeddings_from_image_file(imagePath: str):
 	"""
@@ -534,8 +547,7 @@ def load_sqlite_db(db: database.CopEyeDatabase):
 			crimes.append(database.Crime(ident, artigo))
 
 		#Add a item to the dict containing = Fugitive: ( listof(images) , listof(crimes) )
-		print(len(shots))
-		dataset[ident]=(database.Fugitivo(nome,idade,periculosidade,ident),shots,crimes)
+		dataset[str(nome+";"+str(ident))]=(database.Fugitivo(nome,idade,periculosidade,ident),shots,crimes)
 		shots=[]
 		crimes=[]
 

@@ -72,12 +72,8 @@ history={}
 detectedInFrame={}
 
 print("[INFO] - Loading known embeddings")
-db_data = pickle.loads(open("known/db_embeddings.pickle","rb").read()) 
 
-
-
-
-
+#Loading to variables
 sql_data,articles = load_sqlite_db(defaultdb)
 for i in sql_data:
 	f,imgs,crimes = sql_data.get(i,[])
@@ -86,16 +82,17 @@ for i in sql_data:
 		db_names.append(f.nome)
 		db_facepaths.append(i.uri)
 
-#Loading to variables
-for e in db_data["embeddings"]:
-	db_embeddings.append(e)
 
-for n in db_data["names"]:
-	db_names.append(n)
+# db_data = pickle.loads(open("known/db_embeddings.pickle","rb").read()) 
+# for e in db_data["embeddings"]:
+# 	db_embeddings.append(e)
 
-#facePaths for each person in the database
-for fp in db_data["facePaths"]:
-	db_facepaths.append(fp)
+# for n in db_data["names"]:
+# 	db_names.append(n)
+
+# #facePaths for each person in the database
+# for fp in db_data["facePaths"]:
+# 	db_facepaths.append(fp)
 
 
 print("[INFO] - Starting video read")
@@ -143,13 +140,13 @@ try:
 						user_names.append(f.nome)
 						user_facepaths.append(i.uri)
 
-				user_data = pickle.loads(open('known/user_embeddings.pickle','rb').read())
-				for e in user_data['embeddings']:
-					user_embeddings.append(e)
-				for n in user_data['names']:
-					user_names.append(n)
-				for fp in user_data['facePaths']:
-					user_facepaths.append(fp)
+				# user_data = pickle.loads(open('known/user_embeddings.pickle','rb').read())
+				# for e in user_data['embeddings']:
+				# 	user_embeddings.append(e)
+				# for n in user_data['names']:
+				# 	user_names.append(n)
+				# for fp in user_data['facePaths']:
+				# 	user_facepaths.append(fp)
 
 				knownEmbeddings = db_embeddings + user_embeddings
 				knownNames = db_names + user_names

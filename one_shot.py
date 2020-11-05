@@ -52,10 +52,6 @@ db_embeddings=[]
 db_names=[]
 db_facepaths=[]
 
-user_embeddings=[]
-user_names=[]
-user_facepaths=[]
-
 knownEmbeddings = []
 knownNames = []
 facePaths = []
@@ -70,18 +66,22 @@ history={}
 detectedInFrame={}
 
 print("[INFO] - Loading known embeddings")
-db_data = pickle.loads(open("known/db_embeddings.pickle","rb").read()) 
 
+
+# db_data = pickle.loads(open("known/db_embeddings.pickle","rb").read()) 
 #Loading to variables
-for e in db_data["embeddings"]:
-	db_embeddings.append(e)
+# for e in db_data["embeddings"]:
+# 	db_embeddings.append(e)
 
-for n in db_data["names"]:
-	db_names.append(n)
+# for n in db_data["names"]:
+# 	db_names.append(n)
 
-#facePaths for each person in the database
-for fp in db_data["facePaths"]:
-	db_facepaths.append(fp)
+# #facePaths for each person in the database
+# for fp in db_data["facePaths"]:
+# 	db_facepaths.append(fp)
+
+
+sql_data,articles = load_sqlite_db(defaultdb)
 
 
 fps = FPS().start()
@@ -107,19 +107,32 @@ try:
 		try:
 			if  globalvar.event.is_set():
 				try:
-					user_data = pickle.loads(open('known/user_embeddings.pickle','rb').read())
-					print('Reloading user database...')
-					for e in user_data['embeddings']:
-						user_embeddings.append(e)
-					for n in user_data['names']:
-						user_names.append(n)
-					for fp in user_data['facePaths']:
-						user_facepaths.append(fp)
+					print("Entrei e atualizei")
+					db_embeddings=[]
+					db_names=[]
+					db_facepaths=[]
+					
+					sql_data,articles = load_sqlite_db(defaultdb)
+					for fid in sql_data:
+						f,imgs,crimes = sql_data.get(fid,[])
+						for i in imgs:
+							db_embeddings.append(i.encoding)
+							db_names.append(fid)
+							db_facepaths.append(i.uri)
+
+					# user_data = pickle.loads(open('known/user_embeddings.pickle','rb').read())
+					# print('Reloading user database...')
+					# for e in user_data['embeddings']:
+					# 	user_embeddings.append(e)
+					# for n in user_data['names']:
+					# 	user_names.append(n)
+					# for fp in user_data['facePaths']:
+					# 	user_facepaths.append(fp)
 				except FileNotFoundError:
 					pass
-				knownEmbeddings = db_embeddings + user_embeddings
-				knownNames = db_names + user_names
-				facePaths = db_facepaths + user_facepaths
+				knownEmbeddings = db_embeddings
+				knownNames = db_names
+				facePaths = db_facepaths
 				globalvar.event.clear()
 				
 
@@ -218,8 +231,9 @@ try:
 
 						if probability >= args["p"] : 
 							text = "#{}-{} : {:.2f}%".format(f,name, probability*100)
+							
 							if args['android']:
-								detectedInFrame = createDetectedStruct(detectedInFrame,(probability,name,frameOut,face,faceComparedPath,frameNo))
+								detectedInFrame = createDetectedStruct(detectedInFrame,(probability,name,frameOut,face,faceComparedPath,frameNo,sql_data.get(name,() )))
 
 						else:
 							name="Unknown"
