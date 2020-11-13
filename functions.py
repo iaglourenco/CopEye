@@ -152,7 +152,7 @@ def sendFrame(detected,fid,typeOfSend):
 		
 		crimes_list = ""
 		for c in fugitive_crimes:
-			crimes_list += ";"+str(c.artigo);
+			crimes_list += str(c.artigo) + ";";
 
 		# crimes_list = crime1;crime2;crime3;crimeN
 
@@ -202,6 +202,7 @@ def createDetectedStruct(detected,dataTuple):
 	frameNo=dataTuple[5]
 	fugitive_info = dataTuple[6] # crimes, images, and info about the fugitive
 
+	
 	p = detected.get(fid)
 	if p == None:
 		detected[fid]=(probability,frame,face_crop,faceComparedPath,frameNo,fugitive_info)
@@ -246,7 +247,7 @@ def __receiveBytes():
 			try:
 				imgPath = ['./datasets/{}/{}'.format(name,filename)]
 				update_user_encodings([name],imgPath)
-				sqlite_add_fugitives(userdb,Fugitivo(name,age,periculosity),imgPath,crimes.split(';'))
+				sqlite_add_fugitives(defaultdb,Fugitivo(name,age,periculosity),imgPath,crimes.split(';'))
 				globalvar.event.set()
 	
 			except Exception :

@@ -67,6 +67,14 @@ detectedInFrame={}
 
 print("[INFO] - Loading known embeddings")
 
+#Loading to variables
+sql_data,articles = load_sqlite_db(defaultdb)
+for i in sql_data:
+	f,imgs,crimes = sql_data.get(i,[])
+	for i in imgs:
+		db_embeddings.append(i.encoding)
+		db_names.append(f.nome)
+		db_facepaths.append(i.uri)
 
 # db_data = pickle.loads(open("known/db_embeddings.pickle","rb").read()) 
 #Loading to variables
@@ -106,30 +114,28 @@ try:
 	while True:
 		try:
 			if  globalvar.event.is_set():
-				try:
-					print("Entrei e atualizei")
-					db_embeddings=[]
-					db_names=[]
-					db_facepaths=[]
-					
-					sql_data,articles = load_sqlite_db(defaultdb)
-					for fid in sql_data:
-						f,imgs,crimes = sql_data.get(fid,[])
-						for i in imgs:
-							db_embeddings.append(i.encoding)
-							db_names.append(fid)
-							db_facepaths.append(i.uri)
-
-					# user_data = pickle.loads(open('known/user_embeddings.pickle','rb').read())
-					# print('Reloading user database...')
-					# for e in user_data['embeddings']:
-					# 	user_embeddings.append(e)
-					# for n in user_data['names']:
-					# 	user_names.append(n)
-					# for fp in user_data['facePaths']:
-					# 	user_facepaths.append(fp)
-				except FileNotFoundError:
-					pass
+				
+				print("Updating user database")
+				db_embeddings=[]
+				db_names=[]
+				db_facepaths=[]
+				
+				sql_data,articles = load_sqlite_db(defaultdb)
+				for fid in sql_data:
+					f,imgs,crimes = sql_data.get(fid,[])
+					for i in imgs:
+						db_embeddings.append(i.encoding)
+						db_names.append(fid)
+						db_facepaths.append(i.uri)
+				# user_data = pickle.loads(open('known/user_embeddings.pickle','rb').read())
+				# print('Reloading user database...')
+				# for e in user_data['embeddings']:
+				# 	user_embeddings.append(e)
+				# for n in user_data['names']:
+				# 	user_names.append(n)
+				# for fp in user_data['facePaths']:
+				# 	user_facepaths.append(fp)
+				
 				knownEmbeddings = db_embeddings
 				knownNames = db_names
 				facePaths = db_facepaths

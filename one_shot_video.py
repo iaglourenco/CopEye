@@ -54,9 +54,6 @@ db_embeddings=[]
 db_names=[]
 db_facepaths=[]
 
-user_embeddings=[]
-user_names=[]
-user_facepaths=[]
 
 knownEmbeddings = []
 knownNames = []
@@ -109,6 +106,9 @@ frame = imutils.resize(frame, width=600)
 
 out = VideoWriter(args["o"]+".avi",cv2.VideoWriter_fourcc(*'XVID'),vc.get(cv2.CAP_PROP_FPS)/2,(frame.shape[1],frame.shape[0]))
 
+
+sql_data,articles = load_sqlite_db(defaultdb)
+
 fps = FPS().start()
 frameNo=1
 pause = False
@@ -128,17 +128,17 @@ try:
 		try:
 			if globalvar.event.is_set():
 				print('Updating user database')
-				user_embeddings=[]
-				user_names=[]
-				user_facepaths=[]
+				db_embeddings=[]
+				db_names=[]
+				db_facepaths=[]
 
-				sql_data,articles = load_sqlite_db(userdb)
-				for i in sql_data:
-					f,imgs,crimes = sql_data.get(i,[])
+				sql_data,articles = load_sqlite_db(defaultdb)
+				for fid in sql_data:
+					f,imgs,crimes = sql_data.get(fid,[])
 					for i in imgs:
-						user_embeddings.append(i.encoding)
-						user_names.append(f.nome)
-						user_facepaths.append(i.uri)
+						db_embeddings.append(i.encoding)
+						db_names.append(fid)
+						db_facepaths.append(i.uri)
 
 				# user_data = pickle.loads(open('known/user_embeddings.pickle','rb').read())
 				# for e in user_data['embeddings']:
@@ -148,9 +148,9 @@ try:
 				# for fp in user_data['facePaths']:
 				# 	user_facepaths.append(fp)
 
-				knownEmbeddings = db_embeddings + user_embeddings
-				knownNames = db_names + user_names
-				facePaths = db_facepaths + user_facepaths
+				knownEmbeddings = db_embeddings
+				knownNames = db_names
+				facePaths = db_facepaths
 				globalvar.event.clear()
 
 
@@ -249,7 +249,7 @@ try:
 						if probability >= args["p"] : 
 							text = "#{}-{} : {:.2f}%".format(f,name, probability*100)
 							if args['android']:
-								detectedInFrame = createDetectedStruct(detectedInFrame,(probability,name,frameOut,face,faceComparedPath,frameNo))
+								detectedInFrame = createDetectedStruct(detectedInFrame,(probability,name,frameOut,face,faceComparedPath,frameNo,sql_data.get(name,()) ))
 						else:
 							name="Unknown"
 						
