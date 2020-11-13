@@ -121,6 +121,7 @@ else:
 if args["android"]:
 	print("[INFO] - ANDROID MODE - Sending data to {}:{}\n".format(IP,DEFAULT_PORT))
 	os.system("rm -f log/*")
+	thread_listen()
 
 globalvar.event.set()
 try:

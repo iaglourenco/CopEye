@@ -104,6 +104,7 @@ else:
 if args["android"]:
 	print("[INFO] - ANDROID MODE - Sending data to {}:{}\n".format(IP,DEFAULT_PORT))
 	os.system("rm -f log/*")
+	thread_listen()
 
 
 vs = VideoStream(src=0,resolution=(1280,720)).start()
@@ -303,7 +304,6 @@ try:
 			
 except KeyboardInterrupt:
 	fps.stop()
-	kill_thread()
 	print("\n[INFO] - elapsed time: {:.2f}".format(fps.elapsed()))
 	print("[INFO] - approx. FPS: {:.2f}".format(fps.fps()))
 	vs.stop()

@@ -225,11 +225,28 @@ def __receiveBytes():
 		try:
 			ns,address = s.accept()
 			print('Connection from',address)
-			received = ns.recv(BUFFER_SIZE)
-			print(received)
-			received = received.decode()
-			filesize, crimes, periculosity, name,age= received.split(SEPARATOR)
-			filename='arquivo'
+			stringData=""
+
+			while True:
+				receivedBytes=ns.recv(1)
+				try:
+					ch=receivedBytes.decode()
+					if ch == '&':
+						break
+					stringData+=ch
+				except UnicodeDecodeError as ue:
+					print(ue)
+					pass
+			print("String Received= "+stringData)
+			filesize, crimes, periculosity, name,age= stringData.split(SEPARATOR)
+			
+
+			# received = ns.recv(BUFFER_SIZE)
+			# print(received)
+			# received = received.decode()
+			# filesize, crimes, periculosity, name,age= received.split(SEPARATOR)
+
+			filename=name+"_"+time.strftime("%d-%m-%Y %H:%M:%S")
 
 			try:
 				os.mkdir('./datasets/{}'.format(name))
@@ -245,6 +262,7 @@ def __receiveBytes():
 					f.write(recvBytes)
 			f.close()
 			try:
+
 				imgPath = ['./datasets/{}/{}'.format(name,filename)]
 				update_user_encodings([name],imgPath)
 				sqlite_add_fugitives(defaultdb,Fugitivo(name,age,periculosity),imgPath,crimes.split(';'))
@@ -510,10 +528,6 @@ def align_faces(imagePaths: list):
 	        image = fa.align(image,gray,rect)
 	        cv2.imwrite(imagePath,image) 
 
-def kill_thread():
-	"""Kills the receive thread"""
-	if(__thread.is_alive()):
-		__thread.kill()
 
 def load_sqlite_db(db: database.CopEyeDatabase):
 	"""Load the sqlite database and create the structure to use in detection"""
